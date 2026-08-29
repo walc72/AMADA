@@ -538,6 +538,18 @@
   </div>
 </div>
 
+<div class="modal-back" id="modal-login">
+  <div class="modal" style="max-width:430px; text-align:center">
+    <h3 style="font-size:24px; margin-bottom:4px">🏪 AMADA</h3>
+    <p class="muted" style="margin-bottom:16px">Control de tienda</p>
+    <p style="margin-bottom:14px">¿Ya tenés tu <strong>código de tienda</strong>? Ingresalo para traer tus datos de la nube.</p>
+    <input type="text" id="login-code" placeholder="ej: 1a2b3c4d-5e6f-..." style="text-align:center; margin-bottom:12px" autocomplete="off">
+    <button class="btn btn-primary" id="login-enter" style="width:100%; margin-bottom:8px">Entrar con mi código</button>
+    <button class="btn btn-secondary" id="login-new" style="width:100%; margin-bottom:8px">✨ Crear tienda nueva en la nube</button>
+    <button class="btn btn-secondary" id="login-skip" style="width:100%">Seguir sin nube por ahora</button>
+  </div>
+</div>
+
 <div class="modal-back" id="modal-ticket">
   <div class="modal" style="max-width:340px">
     <h3>Venta registrada ✔</h3>
@@ -1711,6 +1723,12 @@ $('btn-fs-disconnect').addEventListener('click', async ()=>{
 });
 
 /* ===== Nube (Supabase) ===== */
+// Datos del proyecto propio (la clave "publishable" es pública por diseño;
+// la seguridad la da el código de tienda + RLS en el servidor)
+const EMBEDDED_CLOUD = {
+  url: 'https://taotmxhlbjwkviyeltuy.supabase.co',
+  key: 'sb_publishable_vjQD6d2XtOWi0cfZKXZxWA_T1wza5fL'
+};
 const CLOUD_CFG_KEY = 'amada_cloud_cfg';
 let cloudOn = false, cloudTimer = null, lastCloudSave = null, cloudError = false;
 
@@ -1755,7 +1773,49 @@ async function cloudInit(){
     await cloudSync();
   }
   renderCloudStatus();
+  maybeShowLogin();
 }
+function maybeShowLogin(){
+  const cfg = cloudCfg();
+  const hasData = !!(state.sales.length || state.products.length || state.clients.length);
+  if(!cloudOn && !hasData && (!cfg || !cfg.code || cfg.off) && EMBEDDED_CLOUD.url){
+    $('modal-login').classList.add('open');
+    $('login-code').focus();
+  }
+}
+async function loginWithCode(code){
+  cloudCfgSet({url: EMBEDDED_CLOUD.url, key: EMBEDDED_CLOUD.key, code, off: false});
+  try{
+    await sbCall('amada_get', {k: code}); // valida conexión
+    cloudOn = true;
+    $('modal-login').classList.remove('open');
+    await cloudSync();
+    renderCloudStatus();
+    return true;
+  }catch(e){
+    console.error(e);
+    cloudOn = false;
+    toast('No se pudo conectar: ' + (e.message || 'revisá internet'), true);
+    return false;
+  }
+}
+$('login-enter').addEventListener('click', async ()=>{
+  const code = $('login-code').value.trim().toLowerCase();
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(code)){
+    toast('Ese código no tiene el formato correcto — revisá que esté completo', true);
+    return;
+  }
+  if(await loginWithCode(code)) toast('Conectado a tu tienda ✔');
+});
+$('login-new').addEventListener('click', async ()=>{
+  const code = newStoreCode();
+  $('login-code').value = code;
+  if(await loginWithCode(code)){
+    alert('Tu código de tienda es:\n\n' + code + '\n\n📝 Anotalo en un papel y guardalo: es tu llave para entrar desde otras computadoras o el celular.\n\n(También lo podés ver siempre en la pestaña Respaldo.)');
+    toast('Tienda creada en la nube ✔');
+  }
+});
+$('login-skip').addEventListener('click', ()=> $('modal-login').classList.remove('open'));
 async function cloudPush(){
   if(!cloudOn) return;
   try{
@@ -1809,11 +1869,10 @@ function renderCloudStatus(){
   } else {
     $('cloud-form').style.display = 'block';
     $('cloud-connected').style.display = 'none';
-    if(cfg){
-      if(!$('cl-url').value) $('cl-url').value = cfg.url || '';
-      if(!$('cl-key').value) $('cl-key').value = cfg.key || '';
-      if(!$('cl-code').value) $('cl-code').value = cfg.code || '';
-    }
+    const src = cfg || EMBEDDED_CLOUD;
+    if(!$('cl-url').value) $('cl-url').value = src.url || '';
+    if(!$('cl-key').value) $('cl-key').value = src.key || '';
+    if(cfg && !$('cl-code').value) $('cl-code').value = cfg.code || '';
   }
 }
 $('cl-newcode').addEventListener('click', ()=>{
