@@ -399,6 +399,38 @@
     <p class="muted" id="fs-status" style="margin-top:10px"></p>
   </div>
   <div class="card">
+    <h2>☁️ Nube (Supabase)</h2>
+    <p style="margin-bottom:12px">Guardá tus datos también en internet para poder entrar desde <strong>cualquier computadora o celular</strong> con tu email y contraseña. Los datos se suben solos con cada cambio.</p>
+    <details style="margin-bottom:12px">
+      <summary style="cursor:pointer; color:var(--brand); font-weight:600">¿Cómo lo configuro? (se hace una sola vez)</summary>
+      <ol style="margin:10px 0 0 20px; line-height:1.8; font-size:14.5px">
+        <li>Entrá a <strong>supabase.com</strong> y creá una cuenta gratis.</li>
+        <li>Creá un proyecto (nombre: AMADA) y esperá a que termine de prepararse.</li>
+        <li>En <strong>SQL Editor</strong>, pegá el código de configuración y tocá <strong>Run</strong>.</li>
+        <li>En <strong>Authentication → Users → Add user</strong>: creá tu usuario con email y contraseña (marcá «Auto Confirm User»).</li>
+        <li>En <strong>Project Settings → API</strong>: copiá la <strong>Project URL</strong> y la clave <strong>anon public</strong>, y pegalas acá abajo.</li>
+      </ol>
+    </details>
+    <div id="cloud-form">
+      <div class="row">
+        <div class="grow"><label class="fld">URL del proyecto</label><input type="text" id="cl-url" placeholder="https://xxxxx.supabase.co"></div>
+        <div class="grow"><label class="fld">Clave (anon public)</label><input type="text" id="cl-key" placeholder="eyJ..."></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="grow"><label class="fld">Email</label><input type="text" id="cl-email" placeholder="tu@email.com"></div>
+        <div class="grow"><label class="fld">Contraseña</label><input type="password" id="cl-pass"></div>
+        <button class="btn btn-primary" id="cl-connect">☁️ Conectar</button>
+      </div>
+    </div>
+    <div id="cloud-connected" style="display:none">
+      <p class="muted" id="cloud-status" style="margin-bottom:10px"></p>
+      <div class="row">
+        <button class="btn btn-secondary" id="cl-sync">🔄 Sincronizar ahora</button>
+        <button class="btn btn-secondary" id="cl-logout">Cerrar sesión</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
     <h2>Copia de seguridad</h2>
     <p style="margin-bottom:14px">Toda la información se guarda en este navegador, en esta computadora. Hacé una copia de seguridad <strong>al menos una vez por semana</strong> y guardá el archivo en un pendrive o en la nube.</p>
     <div class="row">
@@ -535,10 +567,12 @@ function load(){
   return {products:[], clients:[], sales:[], abonos:[], closures:[], seq:{p:1,c:1,s:1,a:1,z:1}, lastBackup:null};
 }
 function save(){
+  state.updatedAt = new Date().toISOString();
   try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); storageOk = true; }
   catch(e){ storageOk = false; }
   updateStorageBanner();
   scheduleFileSave();
+  scheduleCloudSave();
 }
 let storageOk = true;
 function checkStorage(){
@@ -1676,8 +1710,138 @@ $('btn-fs-disconnect').addEventListener('click', async ()=>{
   toast('Archivo de datos desconectado');
 });
 
+/* ===== Nube (Supabase) ===== */
+const CLOUD_CFG_KEY = 'amada_cloud_cfg';
+let sb = null, cloudUser = null, cloudTimer = null, lastCloudSave = null, cloudError = false;
+
+function cloudCfg(){
+  try{ return JSON.parse(localStorage.getItem(CLOUD_CFG_KEY) || 'null'); }catch(e){ return null; }
+}
+function loadSupabaseLib(){
+  if(window.supabase) return Promise.resolve(true);
+  return new Promise(res => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+    s.onload = () => res(true);
+    s.onerror = () => res(false);
+    document.head.appendChild(s);
+  });
+}
+async function cloudInit(){
+  renderCloudStatus();
+  const cfg = cloudCfg();
+  if(!cfg || !cfg.url || !cfg.key) return;
+  if(!await loadSupabaseLib()){ return; } // sin internet: seguimos local, se reintenta al reconectar
+  try{
+    sb = window.supabase.createClient(cfg.url, cfg.key);
+    const {data:{session}} = await sb.auth.getSession();
+    if(session){ cloudUser = session.user; await cloudSync(); }
+  }catch(e){ console.error('No se pudo iniciar la nube', e); }
+  renderCloudStatus();
+}
+async function cloudConnect(url, key, email, pass){
+  if(!await loadSupabaseLib()) throw new Error('sin internet o no se pudo cargar el conector');
+  sb = window.supabase.createClient(url, key);
+  const {data, error} = await sb.auth.signInWithPassword({email, password: pass});
+  if(error) throw error;
+  cloudUser = data.user;
+  try{ localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify({url, key, email})); }catch(e){}
+  await cloudSync();
+}
+async function cloudPush(){
+  if(!sb || !cloudUser) return;
+  try{
+    const {error} = await sb.from('tienda').upsert({user_id: cloudUser.id, data: state, updated_at: new Date().toISOString()});
+    if(error) throw error;
+    lastCloudSave = new Date(); cloudError = false;
+  }catch(e){ console.error('No se pudo guardar en la nube', e); cloudError = true; }
+  renderCloudStatus();
+}
+function scheduleCloudSave(){
+  if(!sb || !cloudUser) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(cloudPush, 1500);
+}
+async function cloudSync(){
+  if(!sb || !cloudUser) return;
+  try{
+    const res = await sb.from('tienda').select('data').eq('user_id', cloudUser.id).maybeSingle();
+    if(res.error) throw res.error;
+    const cloudData = res.data && res.data.data && res.data.data.seq
+      ? JSON.parse(JSON.stringify(res.data.data)) : null;
+    const cloudHasData = cloudData && !!(cloudData.sales.length || cloudData.products.length || cloudData.clients.length);
+    const localHasData = !!(state.sales.length || state.products.length || state.clients.length);
+    if(cloudHasData){
+      const cloudAt = cloudData.updatedAt || '';
+      const localAt = state.updatedAt || '';
+      if(!localHasData){
+        state = cloudData; save(); renderAll();
+        toast('Datos traídos desde la nube ✔');
+        return;
+      }
+      if(cloudAt > localAt){
+        const cuando = cloudAt ? fmtDateTime(cloudAt) : 'fecha desconocida';
+        if(confirm(`En la nube hay datos más nuevos (guardados el ${cuando}).\n\nAceptar = usar los de la NUBE en esta computadora.\nCancelar = mantener los de ACÁ y subirlos a la nube.`)){
+          state = cloudData; save(); renderAll();
+          toast('Datos traídos desde la nube ✔');
+          return;
+        }
+      }
+    }
+    await cloudPush();
+  }catch(e){ console.error('Error de sincronización', e); cloudError = true; renderCloudStatus(); }
+}
+function renderCloudStatus(){
+  const cfg = cloudCfg();
+  if(cloudUser){
+    $('cloud-form').style.display = 'none';
+    $('cloud-connected').style.display = 'block';
+    $('cloud-status').innerHTML = cloudError
+      ? '⚠ Conectado como <strong>' + esc(cloudUser.email) + '</strong>, pero el último guardado en la nube falló (¿sin internet?). Se reintenta solo con el próximo cambio.'
+      : '✔ Conectado como <strong>' + esc(cloudUser.email) + '</strong>'
+        + (lastCloudSave ? ' · último guardado en la nube ' + lastCloudSave.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '');
+  } else {
+    $('cloud-form').style.display = 'block';
+    $('cloud-connected').style.display = 'none';
+    if(cfg){
+      if(!$('cl-url').value) $('cl-url').value = cfg.url || '';
+      if(!$('cl-key').value) $('cl-key').value = cfg.key || '';
+      if(!$('cl-email').value) $('cl-email').value = cfg.email || '';
+    }
+  }
+}
+$('cl-connect').addEventListener('click', async ()=>{
+  const url = $('cl-url').value.trim().replace(/\/+$/,'');
+  const key = $('cl-key').value.trim();
+  const email = $('cl-email').value.trim();
+  const pass = $('cl-pass').value;
+  if(!url || !key || !email || !pass){ toast('Completá los cuatro campos', true); return; }
+  $('cl-connect').disabled = true;
+  try{
+    await cloudConnect(url, key, email, pass);
+    toast('Nube conectada ✔ Tus datos ahora se guardan también en internet.');
+  }catch(e){
+    console.error(e);
+    const msg = e && /invalid login/i.test(e.message||'') ? 'email o contraseña incorrectos' : (e.message || 'no se pudo conectar');
+    toast('Error: ' + msg, true);
+  }
+  $('cl-connect').disabled = false;
+  $('cl-pass').value = '';
+  renderCloudStatus();
+});
+$('cl-sync').addEventListener('click', async ()=>{ toast('Sincronizando...'); await cloudSync(); });
+$('cl-logout').addEventListener('click', async ()=>{
+  if(!confirm('¿Cerrar sesión de la nube? Los datos de esta computadora quedan como están; solo deja de sincronizar.')) return;
+  try{ if(sb) await sb.auth.signOut(); }catch(e){}
+  cloudUser = null;
+  try{ localStorage.removeItem(CLOUD_CFG_KEY); }catch(e){}
+  renderCloudStatus();
+  toast('Sesión de nube cerrada');
+});
+
 function renderRespaldo(){
   renderFsStatus();
+  renderCloudStatus();
   $('backup-info').textContent = state.lastBackup
     ? 'Última copia de seguridad: ' + fmtDateTime(state.lastBackup)
     : 'Todavía no hiciste ninguna copia de seguridad.';
@@ -1723,6 +1887,7 @@ $('fm-month').value = todayKey().slice(0,7);
 checkStorage();
 renderAll();
 initFileStore();
+cloudInit();
 </script>
 </body>
 </html>

@@ -25,6 +25,7 @@ Sistema de gestión para una tienda de almacén, en **un solo archivo HTML**. Si
 
 - En el **navegador** (localStorage) — siempre.
 - En un **archivo real** (`AMADA-datos.json`) mediante la File System Access API de Chrome/Edge — recomendado. Si el navegador borra sus datos, el sistema los recupera solo desde el archivo.
+- En la **nube (Supabase)** — opcional: conectando una cuenta gratuita de Supabase, los datos se sincronizan por internet y se puede entrar desde cualquier dispositivo con email y contraseña. La configuración inicial está en `supabase-setup.sql` y en la pestaña Respaldo de la app.
 - El archivo de datos y las copias de seguridad **no se suben a este repositorio** (están en `.gitignore`): contienen información del negocio.
 
 ## Archivos
