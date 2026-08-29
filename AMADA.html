@@ -407,8 +407,8 @@
         <li>Entrá a <strong>supabase.com</strong> y creá una cuenta gratis.</li>
         <li>Creá un proyecto (nombre: AMADA) y esperá a que termine de prepararse.</li>
         <li>En <strong>SQL Editor</strong>, pegá el código de configuración y tocá <strong>Run</strong>.</li>
-        <li>En <strong>Authentication → Users → Add user</strong>: creá tu usuario con email y contraseña (marcá «Auto Confirm User»).</li>
         <li>En <strong>⚙ Project Settings → API Keys</strong>: copiá la <strong>Project URL</strong> y la clave <strong>publishable</strong> (empieza con «sb_publishable_»; la vieja «anon public» que empieza con «eyJ» también sirve), y pegalas acá abajo.</li>
+        <li>Tocá <strong>Conectar</strong>: la app genera tu <strong>código de tienda</strong> — anotalo bien, es la llave para entrar desde otras computadoras o el celular.</li>
       </ol>
     </details>
     <div id="cloud-form">
@@ -417,8 +417,8 @@
         <div class="grow"><label class="fld">Clave (publishable / anon)</label><input type="text" id="cl-key" placeholder="sb_publishable_... o eyJ..."></div>
       </div>
       <div class="row" style="margin-top:10px">
-        <div class="grow"><label class="fld">Email</label><input type="text" id="cl-email" placeholder="tu@email.com"></div>
-        <div class="grow"><label class="fld">Contraseña</label><input type="password" id="cl-pass"></div>
+        <div class="grow"><label class="fld">Código de tienda (tu llave — guardalo bien)</label><input type="text" id="cl-code" placeholder="se genera solo al conectar por primera vez"></div>
+        <button class="btn btn-secondary" id="cl-newcode">🎲 Nuevo código</button>
         <button class="btn btn-primary" id="cl-connect">☁️ Conectar</button>
       </div>
     </div>
@@ -426,7 +426,7 @@
       <p class="muted" id="cloud-status" style="margin-bottom:10px"></p>
       <div class="row">
         <button class="btn btn-secondary" id="cl-sync">🔄 Sincronizar ahora</button>
-        <button class="btn btn-secondary" id="cl-logout">Cerrar sesión</button>
+        <button class="btn btn-secondary" id="cl-logout">Desconectar</button>
       </div>
     </div>
   </div>
@@ -1712,63 +1712,68 @@ $('btn-fs-disconnect').addEventListener('click', async ()=>{
 
 /* ===== Nube (Supabase) ===== */
 const CLOUD_CFG_KEY = 'amada_cloud_cfg';
-let sb = null, cloudUser = null, cloudTimer = null, lastCloudSave = null, cloudError = false;
+let cloudOn = false, cloudTimer = null, lastCloudSave = null, cloudError = false;
 
+let cloudMem = null; // respaldo en memoria por si el navegador no deja guardar
 function cloudCfg(){
-  try{ return JSON.parse(localStorage.getItem(CLOUD_CFG_KEY) || 'null'); }catch(e){ return null; }
+  try{
+    const v = localStorage.getItem(CLOUD_CFG_KEY);
+    if(v) return JSON.parse(v);
+  }catch(e){}
+  return cloudMem;
 }
-function loadSupabaseLib(){
-  if(window.supabase) return Promise.resolve(true);
-  return new Promise(res => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
-    s.onload = () => res(true);
-    s.onerror = () => res(false);
-    document.head.appendChild(s);
+function cloudCfgSet(cfg){
+  cloudMem = cfg;
+  try{ localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
+}
+function newStoreCode(){
+  if(crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0; return (c === 'x' ? r : (r&0x3|0x8)).toString(16);
   });
 }
-async function cloudInit(){
-  renderCloudStatus();
+async function sbCall(fn, body){
   const cfg = cloudCfg();
-  if(!cfg || !cfg.url || !cfg.key) return;
-  if(!await loadSupabaseLib()){ return; } // sin internet: seguimos local, se reintenta al reconectar
-  try{
-    sb = window.supabase.createClient(cfg.url, cfg.key);
-    const {data:{session}} = await sb.auth.getSession();
-    if(session){ cloudUser = session.user; await cloudSync(); }
-  }catch(e){ console.error('No se pudo iniciar la nube', e); }
-  renderCloudStatus();
+  const r = await fetch(cfg.url + '/rest/v1/rpc/' + fn, {
+    method: 'POST',
+    headers: {'apikey': cfg.key, 'Authorization': 'Bearer ' + cfg.key, 'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  const text = await r.text();
+  if(!r.ok){
+    if(r.status === 404) throw new Error('falta correr el código SQL en Supabase (paso 3 de las instrucciones)');
+    if(r.status === 401 || r.status === 403) throw new Error('la clave (publishable/anon) no es válida');
+    throw new Error('error ' + r.status + (text ? ' — ' + text.slice(0,120) : ''));
+  }
+  return (text && text !== 'null') ? JSON.parse(text) : null;
 }
-async function cloudConnect(url, key, email, pass){
-  if(!await loadSupabaseLib()) throw new Error('sin internet o no se pudo cargar el conector');
-  sb = window.supabase.createClient(url, key);
-  const {data, error} = await sb.auth.signInWithPassword({email, password: pass});
-  if(error) throw error;
-  cloudUser = data.user;
-  try{ localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify({url, key, email})); }catch(e){}
-  await cloudSync();
+async function cloudInit(){
+  const cfg = cloudCfg();
+  if(cfg && cfg.url && cfg.key && cfg.code && !cfg.off){
+    cloudOn = true;
+    renderCloudStatus();
+    await cloudSync();
+  }
+  renderCloudStatus();
 }
 async function cloudPush(){
-  if(!sb || !cloudUser) return;
+  if(!cloudOn) return;
   try{
-    const {error} = await sb.from('tienda').upsert({user_id: cloudUser.id, data: state, updated_at: new Date().toISOString()});
-    if(error) throw error;
+    await sbCall('amada_set', {k: cloudCfg().code, payload: state});
     lastCloudSave = new Date(); cloudError = false;
   }catch(e){ console.error('No se pudo guardar en la nube', e); cloudError = true; }
   renderCloudStatus();
 }
 function scheduleCloudSave(){
-  if(!sb || !cloudUser) return;
+  if(!cloudOn) return;
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(cloudPush, 1500);
 }
 async function cloudSync(){
-  if(!sb || !cloudUser) return;
+  if(!cloudOn) return;
   try{
-    const res = await sb.from('tienda').select('data').eq('user_id', cloudUser.id).maybeSingle();
-    if(res.error) throw res.error;
-    const cloudData = res.data && res.data.data && res.data.data.seq
-      ? JSON.parse(JSON.stringify(res.data.data)) : null;
+    const cloudRaw = await sbCall('amada_get', {k: cloudCfg().code});
+    const cloudData = cloudRaw && cloudRaw.seq ? cloudRaw : null;
     const cloudHasData = cloudData && !!(cloudData.sales.length || cloudData.products.length || cloudData.clients.length);
     const localHasData = !!(state.sales.length || state.products.length || state.clients.length);
     if(cloudHasData){
@@ -1793,23 +1798,29 @@ async function cloudSync(){
 }
 function renderCloudStatus(){
   const cfg = cloudCfg();
-  if(cloudUser){
+  if(cloudOn && cfg){
     $('cloud-form').style.display = 'none';
     $('cloud-connected').style.display = 'block';
-    $('cloud-status').innerHTML = cloudError
-      ? '⚠ Conectado como <strong>' + esc(cloudUser.email) + '</strong>, pero el último guardado en la nube falló (¿sin internet?). Se reintenta solo con el próximo cambio.'
-      : '✔ Conectado como <strong>' + esc(cloudUser.email) + '</strong>'
-        + (lastCloudSave ? ' · último guardado en la nube ' + lastCloudSave.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '');
+    $('cloud-status').innerHTML = (cloudError
+      ? '⚠ Conectado, pero el último guardado en la nube falló (¿sin internet? ¿falta el SQL?). Se reintenta solo con el próximo cambio.'
+      : '✔ Conectado a la nube'
+        + (lastCloudSave ? ' · último guardado ' + lastCloudSave.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : ''))
+      + '<br>Código de tienda: <strong>' + esc(cfg.code || '') + '</strong> — guardalo: con él (más la URL y la clave) entrás desde cualquier dispositivo.';
   } else {
     $('cloud-form').style.display = 'block';
     $('cloud-connected').style.display = 'none';
     if(cfg){
       if(!$('cl-url').value) $('cl-url').value = cfg.url || '';
       if(!$('cl-key').value) $('cl-key').value = cfg.key || '';
-      if(!$('cl-email').value) $('cl-email').value = cfg.email || '';
+      if(!$('cl-code').value) $('cl-code').value = cfg.code || '';
     }
   }
 }
+$('cl-newcode').addEventListener('click', ()=>{
+  if($('cl-code').value.trim() && !confirm('Ya hay un código escrito. Un código nuevo apunta a OTRO espacio vacío en la nube. ¿Generar uno nuevo igual?')) return;
+  $('cl-code').value = newStoreCode();
+  toast('Código nuevo generado — anotalo y guardalo bien');
+});
 $('cl-connect').addEventListener('click', async ()=>{
   let url = $('cl-url').value.trim().replace(/\/+$/,'');
   // si pegaron la dirección del panel de Supabase, deducir la URL real del proyecto
@@ -1817,35 +1828,42 @@ $('cl-connect').addEventListener('click', async ()=>{
   if(m) url = 'https://' + m[1] + '.supabase.co';
   if(url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
   const key = $('cl-key').value.trim();
-  const email = $('cl-email').value.trim();
-  const pass = $('cl-pass').value;
-  if(!url || !key || !email || !pass){ toast('Completá los cuatro campos', true); return; }
+  let code = $('cl-code').value.trim().toLowerCase();
+  if(!url || !key){ toast('Completá la URL y la clave', true); return; }
   if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)){
     toast('La URL del proyecto debe verse así: https://abcde.supabase.co — la encontrás en ⚙ Project Settings → Data API', true);
     return;
   }
-  $('cl-url').value = url;
+  if(!code) code = newStoreCode();
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(code)){
+    toast('El código de tienda no tiene el formato correcto: tocá «🎲 Nuevo código» o pegá el que guardaste', true);
+    return;
+  }
+  $('cl-url').value = url; $('cl-code').value = code;
   $('cl-connect').disabled = true;
   try{
-    await cloudConnect(url, key, email, pass);
-    toast('Nube conectada ✔ Tus datos ahora se guardan también en internet.');
+    cloudCfgSet({url, key, code, off: false});
+    await sbCall('amada_get', {k: code}); // valida URL, clave y que el SQL esté instalado
+    cloudOn = true;
+    await cloudSync();
+    toast('Nube conectada ✔ Guardá tu código de tienda: es tu llave.');
   }catch(e){
     console.error(e);
-    const msg = e && /invalid login/i.test(e.message||'') ? 'email o contraseña incorrectos' : (e.message || 'no se pudo conectar');
+    cloudOn = false;
+    const msg = /failed to fetch|networkerror/i.test(e.message||'') ? 'no se pudo llegar a Supabase (¿URL mal escrita o sin internet?)' : (e.message || 'no se pudo conectar');
     toast('Error: ' + msg, true);
   }
   $('cl-connect').disabled = false;
-  $('cl-pass').value = '';
   renderCloudStatus();
 });
 $('cl-sync').addEventListener('click', async ()=>{ toast('Sincronizando...'); await cloudSync(); });
-$('cl-logout').addEventListener('click', async ()=>{
-  if(!confirm('¿Cerrar sesión de la nube? Los datos de esta computadora quedan como están; solo deja de sincronizar.')) return;
-  try{ if(sb) await sb.auth.signOut(); }catch(e){}
-  cloudUser = null;
-  try{ localStorage.removeItem(CLOUD_CFG_KEY); }catch(e){}
+$('cl-logout').addEventListener('click', ()=>{
+  const cfg = cloudCfg();
+  if(!confirm('¿Desconectar la nube? Los datos de este dispositivo quedan como están; solo deja de sincronizar.\n\nTu código de tienda queda anotado en el formulario por si querés reconectar.')) return;
+  cloudOn = false;
+  if(cfg) cloudCfgSet(Object.assign({}, cfg, {off: true}));
   renderCloudStatus();
-  toast('Sesión de nube cerrada');
+  toast('Nube desconectada');
 });
 
 function renderRespaldo(){

@@ -1,21 +1,34 @@
--- Configuración de AMADA en Supabase
--- Pegá TODO este código en: SQL Editor → New query → Run
+-- Configuración de AMADA en Supabase (versión con código de tienda)
+-- Pegá TODO este código en: SQL Editor → New query → botón Run
+-- Es seguro correrlo más de una vez.
 
--- Tabla que guarda los datos de la tienda (una fila por usuario)
-create table if not exists tienda (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+create table if not exists tiendas (
+  store_key uuid primary key,
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
 
--- Seguridad: cada usuario solo puede ver y tocar SUS datos
-alter table tienda enable row level security;
+-- Nadie puede tocar la tabla directamente…
+alter table tiendas enable row level security;
 
-create policy "el propietario lee sus datos"
-  on tienda for select using (auth.uid() = user_id);
+-- …solo a través de estas dos funciones, conociendo el código de tienda:
+create or replace function amada_get(k uuid)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select data from tiendas where store_key = k;
+$$;
 
-create policy "el propietario crea sus datos"
-  on tienda for insert with check (auth.uid() = user_id);
-
-create policy "el propietario actualiza sus datos"
-  on tienda for update using (auth.uid() = user_id);
+create or replace function amada_set(k uuid, payload jsonb)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into tiendas (store_key, data, updated_at)
+  values (k, payload, now())
+  on conflict (store_key) do update
+    set data = excluded.data, updated_at = now();
+$$;
