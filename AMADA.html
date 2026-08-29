@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMADA — Control de Tienda</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --ink:#1c2733; --muted:#68788a;
+    --brand:#0e7a5f; --brand-dark:#0a5c48; --brand-soft:#e3f2ed;
+    --accent:#f0a202; --danger:#c0392b; --danger-soft:#fdecea;
+    --ok:#1e8e3e; --line:#dde4ea; --warn-soft:#fef7e0;
+    --radius:10px; --shadow:0 1px 3px rgba(16,32,48,.10);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--ink); font-size:16px;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select,textarea{font-family:inherit; font-size:16px;}
+
+  /* ---------- Layout ---------- */
+  header{background:var(--brand); color:#fff; padding:10px 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; position:sticky; top:0; z-index:50; box-shadow:var(--shadow);}
+  header h1{font-size:20px; letter-spacing:1px;}
+  header h1 span{font-weight:300; font-size:14px; opacity:.85; margin-left:6px;}
+  nav{display:flex; gap:4px; flex-wrap:wrap;}
+  nav button{background:transparent; border:none; color:#fff; padding:9px 14px; border-radius:8px; font-size:15px; opacity:.85;}
+  nav button:hover{background:rgba(255,255,255,.15); opacity:1;}
+  nav button.active{background:#fff; color:var(--brand); font-weight:600; opacity:1;}
+  nav button .badge{background:var(--accent); color:#3a2b00; border-radius:10px; padding:1px 7px; font-size:12px; font-weight:700; margin-left:5px;}
+  main{max-width:1100px; margin:0 auto; padding:18px 14px 60px;}
+  section.tab{display:none;}
+  section.tab.visible{display:block;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; margin-bottom:16px;}
+  h2{font-size:19px; margin-bottom:12px;}
+  h3{font-size:16px; margin-bottom:8px;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;}
+  .grow{flex:1 1 180px;}
+  label.fld{display:block; font-size:13px; color:var(--muted); margin-bottom:3px; font-weight:600;}
+  input[type=text],input[type=number],input[type=date],select{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#fff;}
+  input:focus,select:focus{outline:2px solid var(--brand-soft); border-color:var(--brand);}
+
+  .btn{border:none; border-radius:8px; padding:10px 16px; font-size:15px; font-weight:600;}
+  .btn-primary{background:var(--brand); color:#fff;}
+  .btn-primary:hover{background:var(--brand-dark);}
+  .btn-secondary{background:#e8edf2; color:var(--ink);}
+  .btn-secondary:hover{background:#dbe3ea;}
+  .btn-danger{background:var(--danger-soft); color:var(--danger);}
+  .btn-sm{padding:6px 10px; font-size:13px;}
+
+  table{width:100%; border-collapse:collapse; font-size:15px;}
+  th{font-size:12.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); text-align:left; padding:8px 8px; border-bottom:2px solid var(--line);}
+  td{padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  td.num, th.num{text-align:right; font-variant-numeric:tabular-nums;}
+  .table-wrap{overflow-x:auto;}
+  .low-stock{background:var(--warn-soft);}
+  .pill{display:inline-block; padding:2px 9px; border-radius:12px; font-size:12.5px; font-weight:600;}
+  .pill-warn{background:var(--warn-soft); color:#8a6400; border:1px solid #ecd9a0;}
+  .pill-cat{background:var(--brand-soft); color:var(--brand-dark);}
+  .pill-danger{background:var(--danger-soft); color:var(--danger);}
+  .pill-ok{background:#e6f4ea; color:var(--ok);}
+  .muted{color:var(--muted); font-size:14px;}
+  a{color:var(--brand); font-weight:600;}
+  #storage-banner{display:none; background:var(--danger); color:#fff; padding:10px 16px; font-size:14.5px; text-align:center;}
+  .empty{color:var(--muted); text-align:center; padding:24px 10px; font-size:15px;}
+
+  /* KPI tiles */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px;}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; box-shadow:var(--shadow);}
+  .kpi .k-label{font-size:12.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.4px;}
+  .kpi .k-value{font-size:22px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .kpi.green .k-value{color:var(--brand);}
+  .kpi.red .k-value{color:var(--danger);}
+
+  /* POS */
+  .pos-grid{display:grid; grid-template-columns:1fr 380px; gap:16px;}
+  @media(max-width:860px){.pos-grid{grid-template-columns:1fr;}}
+  .prod-list{max-height:430px; overflow-y:auto; border:1px solid var(--line); border-radius:8px;}
+  .prod-item{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; gap:8px;}
+  .prod-item:hover{background:var(--brand-soft);}
+  .prod-item:last-child{border-bottom:none;}
+  .prod-item .p-name{font-weight:600;}
+  .prod-item .p-meta{font-size:13px; color:var(--muted);}
+  .prod-item .p-price{font-weight:700; white-space:nowrap;}
+  .cart-total{display:flex; justify-content:space-between; font-size:22px; font-weight:700; padding:12px 4px; border-top:2px solid var(--ink); margin-top:8px;}
+  .qty-btn{width:30px; height:30px; border-radius:6px; border:1px solid var(--line); background:#fff; font-size:16px; font-weight:700;}
+  .qty-btn:hover{background:var(--brand-soft);}
+  .pay-methods{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0;}
+  .pay-btn{padding:10px; border:2px solid var(--line); border-radius:8px; background:#fff; font-size:14.5px; font-weight:600;}
+  .pay-btn.selected{border-color:var(--brand); background:var(--brand-soft); color:var(--brand-dark);}
+
+  /* Chart */
+  .chart-box{overflow-x:auto;}
+  .chart-box svg{display:block;}
+  .bar{fill:var(--brand);}
+  .bar:hover{fill:var(--brand-dark);}
+  .bar-label{font-size:11px; fill:var(--muted);}
+  .bar-value{font-size:11px; fill:var(--ink); font-weight:600;}
+
+  /* Modal */
+  .modal-back{position:fixed; inset:0; background:rgba(10,20,30,.45); display:none; align-items:flex-start; justify-content:center; z-index:100; padding:40px 12px;}
+  .modal-back.open{display:flex;}
+  .modal{background:#fff; border-radius:12px; padding:20px; width:100%; max-width:460px; box-shadow:0 10px 40px rgba(0,0,0,.25); max-height:85vh; overflow-y:auto;}
+  .modal h3{font-size:18px; margin-bottom:14px;}
+  .modal .fld-group{margin-bottom:12px;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
+
+  /* Toast */
+  #toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 22px; border-radius:8px; font-size:15px; opacity:0; pointer-events:none; transition:opacity .25s; z-index:200; max-width:90vw; text-align:center;}
+  #toast.show{opacity:1;}
+  #toast.err{background:var(--danger);}
+
+  /* Ticket / print */
+  #ticket-print{display:none;}
+  @media print{
+    body > *{display:none !important;}
+    #ticket-print{display:block !important; font-family:"Courier New", monospace; font-size:13px; width:280px; margin:0; color:#000;}
+    #ticket-print h1{text-align:center; font-size:16px; margin-bottom:2px;}
+    #ticket-print .t-sub{text-align:center; margin-bottom:8px;}
+    #ticket-print table{width:100%; border-collapse:collapse; font-size:12.5px;}
+    #ticket-print td{padding:2px 0; border:none;}
+    #ticket-print .t-total{border-top:1px dashed #000; margin-top:6px; padding-top:6px; font-weight:bold; font-size:15px; display:flex; justify-content:space-between;}
+    #ticket-print .t-foot{text-align:center; margin-top:10px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏪 AMADA<span>Control de tienda</span></h1>
+  <nav id="nav">
+    <button data-tab="vender" class="active">🛒 Vender</button>
+    <button data-tab="productos">📦 Productos<span class="badge" id="badge-low" style="display:none">0</span></button>
+    <button data-tab="clientes">👤 Clientes</button>
+    <button data-tab="fiado">📒 Fiado</button>
+    <button data-tab="caja">💵 Caja</button>
+    <button data-tab="reportes">📊 Reportes</button>
+    <button data-tab="respaldo">💾 Respaldo</button>
+  </nav>
+</header>
+
+<div id="storage-banner">⚠ <strong>Este navegador no está guardando los datos.</strong> Todo lo que cargues se va a perder al cerrar la página. Abrí <strong>AMADA.html</strong> con doble clic desde tu carpeta en la computadora (no desde OneDrive en internet, ni en ventana de incógnito).</div>
+<div id="fs-bar" style="display:none; background:var(--warn-soft); color:#6b5200; padding:10px 16px; font-size:14.5px; text-align:center; border-bottom:1px solid #ecd9a0;">
+  🔗 El archivo de datos necesita tu permiso para seguir guardando automáticamente.
+  <button class="btn btn-primary btn-sm" id="btn-fs-reconnect" style="margin-left:8px">Reconectar</button>
+</div>
+
+<main>
+
+<!-- ============ VENDER ============ -->
+<section class="tab visible" id="tab-vender">
+  <div class="kpis" id="vender-kpis"></div>
+  <div class="pos-grid">
+    <div class="card">
+      <h2>Productos</h2>
+      <div class="row" style="margin-bottom:10px">
+        <div class="grow"><input type="text" id="pos-search" placeholder="Buscar producto..." autocomplete="off"></div>
+        <div style="flex:0 0 160px"><select id="pos-cat"><option value="">Todas las categorías</option></select></div>
+      </div>
+      <div class="prod-list" id="pos-list"></div>
+    </div>
+    <div class="card">
+      <h2>Venta actual</h2>
+      <div class="table-wrap"><table id="cart-table">
+        <thead><tr><th>Producto</th><th style="width:96px">Cant.</th><th class="num">Subtotal</th><th></th></tr></thead>
+        <tbody id="cart-body"></tbody>
+      </table></div>
+      <div class="empty" id="cart-empty">Tocá un producto de la lista para agregarlo</div>
+      <div class="cart-total"><span>TOTAL</span><span id="cart-total">$ 0,00</span></div>
+      <label class="fld">Medio de pago</label>
+      <div class="pay-methods" id="pay-methods">
+        <button class="pay-btn selected" data-pay="efectivo">💵 Efectivo</button>
+        <button class="pay-btn" data-pay="tarjeta">💳 Tarjeta</button>
+        <button class="pay-btn" data-pay="transferencia">📱 Transferencia</button>
+        <button class="pay-btn" data-pay="fiado">📒 Fiado</button>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="fld" id="sale-client-label">Cliente (opcional)</label>
+        <select id="fiado-client"></select>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary grow" id="btn-cobrar" style="font-size:17px; padding:13px">✔ Cobrar</button>
+        <button class="btn btn-secondary" id="btn-cancelar-venta">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRODUCTOS ============ -->
+<section class="tab" id="tab-productos">
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:6px">
+      <h2 style="margin:0">Inventario</h2>
+      <div class="row" style="gap:8px">
+        <button class="btn btn-secondary" id="btn-imp-prod">⬆ Importar productos CSV</button>
+        <button class="btn btn-secondary" id="btn-imp-stock">⬆ Sumar stock CSV</button>
+        <button class="btn btn-primary" id="btn-new-prod">＋ Nuevo producto</button>
+      </div>
+    </div>
+    <p class="muted" style="margin-bottom:12px">¿Primera vez con CSV? Descargá una plantilla de ejemplo:
+      <a href="#" data-tpl="productos">plantilla de productos</a> ·
+      <a href="#" data-tpl="stock">plantilla de stock</a>
+    </p>
+    <input type="file" id="imp-prod-file" accept=".csv,text/csv" style="display:none">
+    <input type="file" id="imp-stock-file" accept=".csv,text/csv" style="display:none">
+    <div class="row" style="margin-bottom:10px">
+      <div class="grow"><input type="text" id="prod-search" placeholder="Buscar por nombre..." autocomplete="off"></div>
+      <div style="flex:0 0 170px"><select id="prod-cat-filter"><option value="">Todas las categorías</option></select></div>
+      <div><label style="font-size:14px; display:flex; align-items:center; gap:6px; padding:9px 0"><input type="checkbox" id="prod-low-only"> Solo stock bajo</label></div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Producto</th><th>Categoría</th><th class="num">Costo</th><th class="num">Precio</th><th class="num">Ganancia</th><th class="num">Stock</th><th></th></tr></thead>
+      <tbody id="prod-body"></tbody>
+    </table></div>
+    <div class="empty" id="prod-empty" style="display:none">No hay productos todavía. Agregá el primero con el botón «Nuevo producto».</div>
+  </div>
+</section>
+
+<!-- ============ CLIENTES ============ -->
+<section class="tab" id="tab-clientes">
+  <div class="kpis" id="clientes-kpis"></div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:12px">
+      <h2 style="margin:0">Clientes</h2>
+      <div class="row" style="gap:8px">
+        <button class="btn btn-secondary" id="btn-imp-cli">⬆ Importar CSV</button>
+        <button class="btn btn-primary" id="btn-new-client2">＋ Nuevo cliente</button>
+      </div>
+    </div>
+    <p class="muted" style="margin-bottom:10px"><a href="#" data-tpl="clientes">Descargar plantilla de clientes (CSV)</a></p>
+    <input type="file" id="imp-cli-file" accept=".csv,text/csv" style="display:none">
+    <div class="row" style="margin-bottom:10px">
+      <div class="grow"><input type="text" id="cli-search" placeholder="Buscar por nombre o teléfono..." autocomplete="off"></div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Cliente</th><th>Teléfono</th><th>Nota</th><th class="num">Compras</th><th class="num">Total comprado</th><th class="num">Debe</th><th></th></tr></thead>
+      <tbody id="cli-body"></tbody>
+    </table></div>
+    <div class="empty" id="cli-empty" style="display:none">No hay clientes todavía. Agregá el primero con «Nuevo cliente». Al hacer una venta podés elegir el cliente para que se arme su historial de compras.</div>
+  </div>
+</section>
+
+<!-- ============ FIADO ============ -->
+<section class="tab" id="tab-fiado">
+  <div class="kpis" id="fiado-kpis"></div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:12px; align-items:flex-end">
+      <h2 style="margin:0">Tickets pendientes</h2>
+      <div class="row" style="gap:8px; align-items:flex-end">
+        <div style="flex:0 0 210px">
+          <label class="fld">Filtrar por cliente</label>
+          <select id="fiado-filter"><option value="">Todos los clientes</option></select>
+        </div>
+        <button class="btn btn-secondary" id="btn-fiado-excel">⬇ Exportar a Excel</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Detalle</th><th class="num">Total</th><th class="num">Pendiente</th><th></th></tr></thead>
+      <tbody id="fiado-tk-body"></tbody>
+    </table></div>
+    <div class="empty" id="fiado-tk-empty" style="display:none">No hay tickets fiados pendientes. 🎉</div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:12px">
+      <h2 style="margin:0">Clientes con cuenta</h2>
+      <button class="btn btn-primary" id="btn-new-client">＋ Nuevo cliente</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Cliente</th><th>Teléfono</th><th class="num">Debe</th><th></th></tr></thead>
+      <tbody id="client-body"></tbody>
+    </table></div>
+    <div class="empty" id="client-empty" style="display:none">No hay clientes registrados.</div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:10px; align-items:flex-end">
+      <h3 style="margin:0">Movimientos de fiado</h3>
+      <div class="row" style="gap:8px; align-items:flex-end">
+        <div style="flex:0 0 125px">
+          <label class="fld">Ver</label>
+          <select id="fm-period">
+            <option value="todo">Recientes</option>
+            <option value="dia">Por día</option>
+            <option value="mes">Por mes</option>
+          </select>
+        </div>
+        <div style="flex:0 0 160px; display:none" id="fm-date-wrap">
+          <label class="fld">Día</label>
+          <input type="date" id="fm-date">
+        </div>
+        <div style="flex:0 0 160px; display:none" id="fm-month-wrap">
+          <label class="fld">Mes</label>
+          <input type="month" id="fm-month">
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Detalle</th><th class="num">Monto</th></tr></thead>
+      <tbody id="fiado-mov-body"></tbody>
+    </table></div>
+    <div class="empty" id="fiado-mov-empty" style="display:none">Sin movimientos todavía.</div>
+  </div>
+</section>
+
+<!-- ============ CAJA ============ -->
+<section class="tab" id="tab-caja">
+  <div class="card">
+    <h2>Cierre de caja — hoy</h2>
+    <div class="kpis" id="caja-kpis"></div>
+    <div class="row">
+      <div style="flex:0 0 200px">
+        <label class="fld">Efectivo contado en caja</label>
+        <input type="number" id="caja-contado" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="grow">
+        <label class="fld">Nota (opcional)</label>
+        <input type="text" id="caja-nota" placeholder="Ej: faltó cambio, retiré $500...">
+      </div>
+      <button class="btn btn-primary" id="btn-cerrar-caja">Guardar cierre</button>
+    </div>
+    <p class="muted" id="caja-dif-msg" style="margin-top:8px"></p>
+  </div>
+  <div class="card">
+    <h3>Cierres anteriores</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Fecha</th><th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">Transf.</th><th class="num">Fiado</th><th class="num">Total vendido</th><th class="num">Contado</th><th class="num">Diferencia</th><th>Nota</th></tr></thead>
+      <tbody id="cierres-body"></tbody>
+    </table></div>
+    <div class="empty" id="cierres-empty" style="display:none">Todavía no hay cierres guardados.</div>
+  </div>
+</section>
+
+<!-- ============ REPORTES ============ -->
+<section class="tab" id="tab-reportes">
+  <div class="card">
+    <div class="row">
+      <div style="flex:0 0 160px">
+        <label class="fld">Período</label>
+        <select id="rep-period">
+          <option value="dia">Diario</option>
+          <option value="semana">Semanal</option>
+          <option value="mes">Mensual</option>
+        </select>
+      </div>
+      <div style="flex:0 0 170px">
+        <label class="fld" id="rep-date-label">Día</label>
+        <input type="date" id="rep-date">
+      </div>
+      <div class="row" style="gap:6px">
+        <button class="btn btn-secondary" id="btn-rep-prev" title="Anterior">‹</button>
+        <button class="btn btn-secondary" id="btn-rep-hoy">Hoy</button>
+        <button class="btn btn-secondary" id="btn-rep-next" title="Siguiente">›</button>
+      </div>
+      <button class="btn btn-secondary" id="btn-rep-excel">⬇ Exportar a Excel</button>
+    </div>
+    <p class="muted" id="rep-range-label" style="margin-top:8px"></p>
+  </div>
+  <div id="rep-content" style="display:none">
+    <div class="kpis" id="rep-kpis"></div>
+    <div class="card chart-box">
+      <h3 id="rep-chart-title">Ventas</h3>
+      <div id="rep-chart"></div>
+    </div>
+    <div class="pos-grid" style="grid-template-columns:1fr 1fr">
+      <div class="card">
+        <h3>🏆 Más vendidos</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>#</th><th>Producto</th><th class="num">Unid.</th><th class="num">Vendido</th></tr></thead>
+          <tbody id="rep-top-body"></tbody>
+        </table></div>
+        <div class="empty" id="rep-top-empty" style="display:none">Sin ventas en este período.</div>
+      </div>
+      <div class="card">
+        <h3>🐢 Menos vendidos (con stock)</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Producto</th><th class="num">Unid. vendidas</th><th class="num">Stock</th></tr></thead>
+          <tbody id="rep-slow-body"></tbody>
+        </table></div>
+        <div class="empty" id="rep-slow-empty" style="display:none">—</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Detalle de ventas</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Fecha y hora</th><th>Productos</th><th>Pago</th><th class="num">Total</th></tr></thead>
+        <tbody id="rep-sales-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESPALDO ============ -->
+<section class="tab" id="tab-respaldo">
+  <div class="card">
+    <h2>💽 Guardado automático en archivo (recomendado)</h2>
+    <p style="margin-bottom:12px">Además de guardarse en el navegador, el sistema puede guardar todo automáticamente en un <strong>archivo de datos real</strong> de tu carpeta (por ejemplo, junto a AMADA.html). Así, aunque el navegador borre sus datos, no perdés nada — y si la carpeta está en OneDrive, tenés copia en la nube.</p>
+    <div class="row">
+      <button class="btn btn-primary" id="btn-fs-connect">📁 Conectar archivo de datos</button>
+      <button class="btn btn-secondary" id="btn-fs-disconnect" style="display:none">Desconectar</button>
+    </div>
+    <p class="muted" id="fs-status" style="margin-top:10px"></p>
+  </div>
+  <div class="card">
+    <h2>Copia de seguridad</h2>
+    <p style="margin-bottom:14px">Toda la información se guarda en este navegador, en esta computadora. Hacé una copia de seguridad <strong>al menos una vez por semana</strong> y guardá el archivo en un pendrive o en la nube.</p>
+    <div class="row">
+      <button class="btn btn-primary" id="btn-backup">⬇ Descargar copia de seguridad</button>
+      <button class="btn btn-secondary" id="btn-restore">⬆ Restaurar desde archivo</button>
+      <button class="btn btn-secondary" id="btn-demo">🎮 Cargar datos demo</button>
+      <button class="btn btn-danger" id="btn-wipe">🗑 Borrar todos los datos</button>
+      <input type="file" id="restore-file" accept=".json" style="display:none">
+    </div>
+    <p class="muted" id="backup-info" style="margin-top:12px"></p>
+  </div>
+  <div class="card">
+    <h3>Datos actuales</h3>
+    <div class="kpis" id="respaldo-kpis"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-back" id="modal-prod">
+  <div class="modal">
+    <h3 id="modal-prod-title">Nuevo producto</h3>
+    <div class="fld-group"><label class="fld">Nombre *</label><input type="text" id="mp-name"></div>
+    <div class="fld-group"><label class="fld">Categoría</label><input type="text" id="mp-cat" list="cat-list" placeholder="Ej: Bebidas, Limpieza..."><datalist id="cat-list"></datalist></div>
+    <div class="row">
+      <div class="grow fld-group"><label class="fld">Precio de costo</label><input type="number" id="mp-cost" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="grow fld-group"><label class="fld">Precio de venta *</label><input type="number" id="mp-price" min="0" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="row">
+      <div class="grow fld-group"><label class="fld">Stock actual</label><input type="number" id="mp-stock" min="0" step="1" value="0"></div>
+      <div class="grow fld-group"><label class="fld">Stock mínimo (alerta)</label><input type="number" id="mp-min" min="0" step="1" value="3"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close="modal-prod">Cancelar</button>
+      <button class="btn btn-primary" id="mp-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="modal-client">
+  <div class="modal">
+    <h3 id="modal-client-title">Nuevo cliente</h3>
+    <div class="fld-group"><label class="fld">Nombre *</label><input type="text" id="mc-name"></div>
+    <div class="fld-group"><label class="fld">Teléfono</label><input type="text" id="mc-phone"></div>
+    <div class="fld-group"><label class="fld">Nota (opcional)</label><input type="text" id="mc-notes" placeholder="Ej: vecina de la esquina, paga los viernes..."></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close="modal-client">Cancelar</button>
+      <button class="btn btn-primary" id="mc-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="modal-abono">
+  <div class="modal">
+    <h3>Registrar pago de fiado</h3>
+    <p style="margin-bottom:12px" id="ma-info"></p>
+    <div class="fld-group"><label class="fld">Monto que paga *</label><input type="number" id="ma-amount" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close="modal-abono">Cancelar</button>
+      <button class="btn btn-primary" id="ma-save">Registrar pago</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="modal-import">
+  <div class="modal" style="max-width:540px">
+    <h3 id="mi-title">Importar</h3>
+    <div id="mi-summary" style="font-size:14.5px; max-height:320px; overflow-y:auto; line-height:1.6"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close="modal-import">Cancelar</button>
+      <button class="btn btn-primary" id="mi-apply">✔ Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="modal-hist">
+  <div class="modal" style="max-width:560px">
+    <h3 id="mh-title">Historial</h3>
+    <div class="row" style="margin-bottom:12px">
+      <div style="flex:0 0 130px">
+        <label class="fld">Ver</label>
+        <select id="mh-period">
+          <option value="todo">Todo</option>
+          <option value="dia">Por día</option>
+          <option value="mes">Por mes</option>
+        </select>
+      </div>
+      <div style="flex:0 0 165px; display:none" id="mh-date-wrap">
+        <label class="fld">Día</label>
+        <input type="date" id="mh-date">
+      </div>
+      <div style="flex:0 0 165px; display:none" id="mh-month-wrap">
+        <label class="fld">Mes</label>
+        <input type="month" id="mh-month">
+      </div>
+    </div>
+    <div class="kpis" id="mh-kpis" style="grid-template-columns:repeat(3,1fr)"></div>
+    <div class="table-wrap" style="max-height:320px; overflow-y:auto"><table>
+      <thead><tr><th>Fecha</th><th>Detalle</th><th>Pago</th><th class="num">Monto</th></tr></thead>
+      <tbody id="mh-body"></tbody>
+    </table></div>
+    <div class="empty" id="mh-empty" style="display:none">Sin movimientos todavía.</div>
+    <div class="modal-actions"><button class="btn btn-secondary" data-close="modal-hist">Cerrar</button></div>
+  </div>
+</div>
+
+<div class="modal-back" id="modal-ticket">
+  <div class="modal" style="max-width:340px">
+    <h3>Venta registrada ✔</h3>
+    <div id="ticket-preview" style="font-family:'Courier New',monospace; font-size:13px; border:1px dashed var(--line); border-radius:8px; padding:12px; margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close="modal-ticket">Cerrar</button>
+      <button class="btn btn-primary" id="btn-print-ticket">🖨 Imprimir ticket</button>
+    </div>
+  </div>
+</div>
+
+<div id="ticket-print"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= Datos ================= */
+const LS_KEY = 'amada_tienda_v1';
+const PAY_LABEL = {efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia', fiado:'Fiado'};
+
+let state = load();
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){ console.error('No se pudo leer el almacenamiento', e); }
+  return {products:[], clients:[], sales:[], abonos:[], closures:[], seq:{p:1,c:1,s:1,a:1,z:1}, lastBackup:null};
+}
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); storageOk = true; }
+  catch(e){ storageOk = false; }
+  updateStorageBanner();
+  scheduleFileSave();
+}
+let storageOk = true;
+function checkStorage(){
+  try{ localStorage.setItem('amada_probe','1'); localStorage.removeItem('amada_probe'); storageOk = true; }
+  catch(e){ storageOk = false; }
+  updateStorageBanner();
+}
+function updateStorageBanner(){
+  document.getElementById('storage-banner').style.display = storageOk ? 'none' : 'block';
+}
+
+/* ================= Utilidades ================= */
+const $ = id => document.getElementById(id);
+function fmt(n){ return '$ ' + (Number(n)||0).toLocaleString('es-AR',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function todayKey(d){ d = d || new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dateFromKey(k){ const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); }
+function fmtDate(k){ const d = dateFromKey(k); return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+function fmtDateTime(ts){ const d = new Date(ts); return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'}) + ' ' + d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); }
+let toastTimer = null;
+function toast(msg, isErr){
+  const t = $('toast'); t.textContent = msg; t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>{ t.className=''; }, 3200);
+}
+function download(filename, content, mime){
+  const blob = new Blob([content], {type: mime});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function categories(){
+  return [...new Set(state.products.map(p => p.cat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function clientBalance(cid){
+  const owed = state.sales.filter(s => s.pay==='fiado' && s.clientId===cid).reduce((t,s)=>t+s.total,0);
+  const paid = state.abonos.filter(a => a.clientId===cid).reduce((t,a)=>t+a.amount,0);
+  return owed - paid;
+}
+function lowStockCount(){ return state.products.filter(p => p.stock <= p.min).length; }
+function fiadoPendingTickets(cid){
+  // Pendiente por ticket: los pagos de un ticket puntual se descuentan de ese ticket;
+  // los pagos libres (parciales / cobrar todo) se descuentan del ticket más viejo al más nuevo.
+  const sales = state.sales.filter(s => s.pay==='fiado' && s.clientId===cid)
+    .slice().sort((a,b)=>a.ts.localeCompare(b.ts));
+  const targeted = {}; let free = 0;
+  state.abonos.filter(a => a.clientId===cid).forEach(a => {
+    if(a.saleId) targeted[a.saleId] = (targeted[a.saleId]||0) + a.amount;
+    else free += a.amount;
+  });
+  const out = sales.map(s => {
+    let pending = s.total - (targeted[s.id]||0);
+    if(pending < 0){ free += -pending; pending = 0; }
+    return {sale:s, pending};
+  });
+  out.forEach(o => {
+    if(free <= 0 || o.pending <= 0) return;
+    const use = Math.min(o.pending, free);
+    o.pending -= use; free -= use;
+  });
+  return out.filter(o => o.pending > 0.009);
+}
+
+/* ================= Navegación ================= */
+document.querySelectorAll('#nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('section.tab').forEach(s=>s.classList.remove('visible'));
+    $('tab-'+btn.dataset.tab).classList.add('visible');
+    renderAll();
+    if(btn.dataset.tab === 'reportes') renderReport();
+  });
+});
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', ()=> $(b.dataset.close).classList.remove('open')));
+document.querySelectorAll('.modal-back').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+
+/* ================= VENDER (POS) ================= */
+let cart = [];   // {pid, name, price, cost, qty, stock}
+let payMethod = 'efectivo';
+
+function renderPosList(){
+  const q = $('pos-search').value.trim().toLowerCase();
+  const cat = $('pos-cat').value;
+  const list = state.products
+    .filter(p => (!q || p.name.toLowerCase().includes(q)) && (!cat || p.cat===cat))
+    .sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  $('pos-list').innerHTML = list.length ? list.map(p => `
+    <div class="prod-item" data-pid="${p.id}">
+      <div>
+        <div class="p-name">${esc(p.name)}</div>
+        <div class="p-meta">${p.cat ? esc(p.cat)+' · ' : ''}Stock: ${p.stock}${p.stock<=p.min ? ' ⚠' : ''}</div>
+      </div>
+      <div class="p-price">${fmt(p.price)}</div>
+    </div>`).join('')
+    : '<div class="empty">No hay productos. Cargalos en la pestaña «Productos».</div>';
+  $('pos-list').querySelectorAll('.prod-item').forEach(el => el.addEventListener('click', ()=> addToCart(Number(el.dataset.pid))));
+}
+function addToCart(pid){
+  const p = state.products.find(x=>x.id===pid); if(!p) return;
+  const line = cart.find(l=>l.pid===pid);
+  const inCart = line ? line.qty : 0;
+  if(inCart + 1 > p.stock && !confirm(`«${p.name}» tiene stock ${p.stock} y llevás ${inCart}. ¿Vender igual?`)) return;
+  if(line) line.qty++;
+  else cart.push({pid, name:p.name, price:p.price, cost:p.cost||0, qty:1});
+  renderCart();
+}
+function renderCart(){
+  const body = $('cart-body');
+  body.innerHTML = cart.map((l,i) => `
+    <tr>
+      <td>${esc(l.name)}<div class="muted" style="font-size:12.5px">${fmt(l.price)} c/u</div></td>
+      <td><button class="qty-btn" data-i="${i}" data-d="-1">−</button>
+          <strong style="display:inline-block; min-width:24px; text-align:center">${l.qty}</strong>
+          <button class="qty-btn" data-i="${i}" data-d="1">＋</button></td>
+      <td class="num">${fmt(l.price*l.qty)}</td>
+      <td><button class="btn btn-danger btn-sm" data-rm="${i}">✕</button></td>
+    </tr>`).join('');
+  $('cart-empty').style.display = cart.length ? 'none' : 'block';
+  $('cart-total').textContent = fmt(cart.reduce((t,l)=>t+l.price*l.qty,0));
+  body.querySelectorAll('.qty-btn').forEach(b => b.addEventListener('click', ()=>{
+    const l = cart[Number(b.dataset.i)]; const d = Number(b.dataset.d);
+    const p = state.products.find(x=>x.id===l.pid);
+    if(d>0 && p && l.qty+1 > p.stock && !confirm(`Stock de «${l.name}»: ${p.stock}. ¿Vender igual?`)) return;
+    l.qty += d; if(l.qty<=0) cart.splice(Number(b.dataset.i),1);
+    renderCart();
+  }));
+  body.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', ()=>{ cart.splice(Number(b.dataset.rm),1); renderCart(); }));
+}
+$('pos-search').addEventListener('input', renderPosList);
+$('pos-cat').addEventListener('change', renderPosList);
+$('btn-cancelar-venta').addEventListener('click', ()=>{ cart = []; renderCart(); });
+
+document.querySelectorAll('#pay-methods .pay-btn').forEach(b => b.addEventListener('click', ()=>{
+  document.querySelectorAll('#pay-methods .pay-btn').forEach(x=>x.classList.remove('selected'));
+  b.classList.add('selected'); payMethod = b.dataset.pay;
+  $('sale-client-label').textContent = payMethod==='fiado' ? 'Cliente (obligatorio para fiado)' : 'Cliente (opcional)';
+}));
+function renderFiadoSelect(){
+  const keep = $('fiado-client').value;
+  $('fiado-client').innerHTML = '<option value="">— Sin cliente —</option>' +
+    state.clients.slice().sort((a,b)=>a.name.localeCompare(b.name,'es'))
+      .map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('fiado-client').value = keep;
+}
+
+$('btn-cobrar').addEventListener('click', ()=>{
+  if(!cart.length){ toast('La venta está vacía', true); return; }
+  const clientId = Number($('fiado-client').value) || null;
+  if(payMethod === 'fiado' && !clientId){ toast('Elegí un cliente para el fiado (cargalo en la pestaña Clientes)', true); return; }
+  const sale = {
+    id: state.seq.s++, ts: new Date().toISOString(),
+    items: cart.map(l=>({pid:l.pid, name:l.name, price:l.price, cost:l.cost, qty:l.qty})),
+    total: cart.reduce((t,l)=>t+l.price*l.qty,0),
+    pay: payMethod, clientId
+  };
+  sale.items.forEach(it => {
+    const p = state.products.find(x=>x.id===it.pid);
+    if(p) p.stock = Math.max(0, p.stock - it.qty);
+  });
+  state.sales.push(sale);
+  save();
+  cart = []; $('fiado-client').value = ''; renderCart(); renderAll();
+  showTicket(sale);
+  toast('Venta registrada: ' + fmt(sale.total));
+});
+
+/* ---- Ticket ---- */
+function ticketHtml(sale){
+  const client = sale.clientId ? state.clients.find(c=>c.id===sale.clientId) : null;
+  return `
+    <h1 style="text-align:center; font-size:16px; margin-bottom:2px">AMADA</h1>
+    <div class="t-sub" style="text-align:center; margin-bottom:8px">${fmtDateTime(sale.ts)} · Venta #${sale.id}</div>
+    <table style="width:100%; border-collapse:collapse; font-size:12.5px">
+      ${sale.items.map(it=>`<tr><td style="border:none; padding:2px 0">${it.qty} x ${esc(it.name)}</td><td style="border:none; padding:2px 0; text-align:right">${fmt(it.price*it.qty)}</td></tr>`).join('')}
+    </table>
+    <div class="t-total" style="border-top:1px dashed #000; margin-top:6px; padding-top:6px; font-weight:bold; font-size:15px; display:flex; justify-content:space-between"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
+    <div style="margin-top:4px">Pago: ${PAY_LABEL[sale.pay]}${client ? ' — ' + esc(client.name) : ''}</div>
+    <div class="t-foot" style="text-align:center; margin-top:10px">¡Gracias por su compra!</div>`;
+}
+function showTicket(sale){
+  $('ticket-preview').innerHTML = ticketHtml(sale);
+  $('ticket-print').innerHTML = ticketHtml(sale);
+  $('modal-ticket').classList.add('open');
+}
+$('btn-print-ticket').addEventListener('click', ()=> window.print());
+
+/* ================= PRODUCTOS ================= */
+let editingProdId = null;
+$('btn-new-prod').addEventListener('click', ()=> openProdModal(null));
+function openProdModal(pid){
+  editingProdId = pid;
+  const p = pid ? state.products.find(x=>x.id===pid) : null;
+  $('modal-prod-title').textContent = p ? 'Editar producto' : 'Nuevo producto';
+  $('mp-name').value = p ? p.name : '';
+  $('mp-cat').value = p ? p.cat : '';
+  $('mp-cost').value = p ? p.cost : '';
+  $('mp-price').value = p ? p.price : '';
+  $('mp-stock').value = p ? p.stock : 0;
+  $('mp-min').value = p ? p.min : 3;
+  $('cat-list').innerHTML = categories().map(c=>`<option value="${esc(c)}">`).join('');
+  $('modal-prod').classList.add('open');
+  $('mp-name').focus();
+}
+$('mp-save').addEventListener('click', ()=>{
+  const name = $('mp-name').value.trim();
+  const price = Number($('mp-price').value);
+  if(!name){ toast('Poné el nombre del producto', true); return; }
+  if(!(price > 0)){ toast('Poné un precio de venta válido', true); return; }
+  const data = {
+    name, cat: $('mp-cat').value.trim(),
+    cost: Number($('mp-cost').value)||0, price,
+    stock: Math.max(0, Number($('mp-stock').value)||0),
+    min: Math.max(0, Number($('mp-min').value)||0)
+  };
+  if(editingProdId){
+    Object.assign(state.products.find(x=>x.id===editingProdId), data);
+    toast('Producto actualizado');
+  } else {
+    state.products.push({id: state.seq.p++, ...data});
+    toast('Producto agregado');
+  }
+  save(); $('modal-prod').classList.remove('open'); renderAll();
+});
+function renderProducts(){
+  const q = $('prod-search').value.trim().toLowerCase();
+  const cat = $('prod-cat-filter').value;
+  const lowOnly = $('prod-low-only').checked;
+  const list = state.products
+    .filter(p => (!q || p.name.toLowerCase().includes(q)) && (!cat || p.cat===cat) && (!lowOnly || p.stock<=p.min))
+    .sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  $('prod-body').innerHTML = list.map(p => {
+    const gain = p.price - (p.cost||0);
+    const pct = p.cost > 0 ? ' ('+Math.round(gain/p.cost*100)+'%)' : '';
+    return `<tr class="${p.stock<=p.min?'low-stock':''}">
+      <td><strong>${esc(p.name)}</strong></td>
+      <td>${p.cat?`<span class="pill pill-cat">${esc(p.cat)}</span>`:''}</td>
+      <td class="num">${p.cost?fmt(p.cost):'—'}</td>
+      <td class="num"><strong>${fmt(p.price)}</strong></td>
+      <td class="num">${p.cost?fmt(gain)+pct:'—'}</td>
+      <td class="num">${p.stock<=p.min?`<span class="pill pill-warn">${p.stock} ⚠</span>`:p.stock}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" data-edit="${p.id}">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" data-del="${p.id}">🗑</button>
+      </td></tr>`;
+  }).join('');
+  $('prod-empty').style.display = state.products.length ? 'none' : 'block';
+  $('prod-body').querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', ()=> openProdModal(Number(b.dataset.edit))));
+  $('prod-body').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', ()=>{
+    const p = state.products.find(x=>x.id===Number(b.dataset.del));
+    if(confirm(`¿Eliminar «${p.name}»? Las ventas ya hechas no se pierden.`)){
+      state.products = state.products.filter(x=>x.id!==p.id);
+      save(); renderAll(); toast('Producto eliminado');
+    }
+  }));
+}
+['prod-search','prod-cat-filter','prod-low-only'].forEach(id => $(id).addEventListener(id==='prod-search'?'input':'change', renderProducts));
+
+/* ================= FIADO ================= */
+let abonoClientId = null;
+let editingClientId = null;
+function openClientModal(cid){
+  editingClientId = cid;
+  const c = cid ? state.clients.find(x=>x.id===cid) : null;
+  $('modal-client-title').textContent = c ? 'Editar cliente' : 'Nuevo cliente';
+  $('mc-name').value = c ? c.name : '';
+  $('mc-phone').value = c ? (c.phone||'') : '';
+  $('mc-notes').value = c ? (c.notes||'') : '';
+  $('modal-client').classList.add('open'); $('mc-name').focus();
+}
+$('btn-new-client').addEventListener('click', ()=> openClientModal(null));
+$('btn-new-client2').addEventListener('click', ()=> openClientModal(null));
+$('mc-save').addEventListener('click', ()=>{
+  const name = $('mc-name').value.trim();
+  if(!name){ toast('Poné el nombre del cliente', true); return; }
+  const data = {name, phone: $('mc-phone').value.trim(), notes: $('mc-notes').value.trim()};
+  if(editingClientId){
+    Object.assign(state.clients.find(x=>x.id===editingClientId), data);
+    toast('Cliente actualizado');
+  } else {
+    state.clients.push({id: state.seq.c++, ...data});
+    toast('Cliente agregado');
+  }
+  save(); $('modal-client').classList.remove('open'); renderAll();
+});
+function deleteClient(cid){
+  const c = state.clients.find(x=>x.id===cid); if(!c) return;
+  const bal = clientBalance(cid);
+  const msg = bal > 0.009
+    ? `«${c.name}» todavía debe ${fmt(bal)}. ¿Eliminar igual?`
+    : `¿Eliminar a «${c.name}»? Las ventas ya registradas no se pierden.`;
+  if(!confirm(msg)) return;
+  state.clients = state.clients.filter(x=>x.id!==cid);
+  save(); renderAll(); toast('Cliente eliminado');
+}
+function clientStats(cid){
+  const sales = state.sales.filter(s=>s.clientId===cid);
+  return {count: sales.length, total: sales.reduce((t,s)=>t+s.total,0)};
+}
+function renderClientes(){
+  const q = $('cli-search').value.trim().toLowerCase();
+  const debtors = state.clients.filter(c=>clientBalance(c.id)>0.009).length;
+  const owed = state.clients.reduce((t,c)=>t+Math.max(0,clientBalance(c.id)),0);
+  $('clientes-kpis').innerHTML = `
+    <div class="kpi"><div class="k-label">Clientes</div><div class="k-value">${state.clients.length}</div></div>
+    <div class="kpi ${debtors?'red':''}"><div class="k-label">Con deuda</div><div class="k-value">${debtors}</div></div>
+    <div class="kpi"><div class="k-label">Fiado por cobrar</div><div class="k-value">${fmt(owed)}</div></div>`;
+  const list = state.clients
+    .filter(c => !q || c.name.toLowerCase().includes(q) || (c.phone||'').includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  $('cli-body').innerHTML = list.map(c => {
+    const st = clientStats(c.id); const bal = clientBalance(c.id);
+    return `<tr>
+      <td><strong>${esc(c.name)}</strong></td>
+      <td>${esc(c.phone||'—')}</td>
+      <td class="muted">${esc(c.notes||'')}</td>
+      <td class="num">${st.count}</td>
+      <td class="num">${fmt(st.total)}</td>
+      <td class="num">${bal>0.009?`<span class="pill pill-danger">${fmt(bal)}</span>`:`<span class="pill pill-ok">Al día</span>`}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" data-hist="${c.id}">📖 Historial</button>
+        <button class="btn btn-secondary btn-sm" data-editc="${c.id}">✎</button>
+        <button class="btn btn-danger btn-sm" data-delc2="${c.id}">🗑</button>
+      </td></tr>`;
+  }).join('');
+  $('cli-empty').style.display = state.clients.length ? 'none' : 'block';
+  $('cli-body').querySelectorAll('[data-hist]').forEach(b => b.addEventListener('click', ()=> openHistorial(Number(b.dataset.hist))));
+  $('cli-body').querySelectorAll('[data-editc]').forEach(b => b.addEventListener('click', ()=> openClientModal(Number(b.dataset.editc))));
+  $('cli-body').querySelectorAll('[data-delc2]').forEach(b => b.addEventListener('click', ()=> deleteClient(Number(b.dataset.delc2))));
+}
+$('cli-search').addEventListener('input', renderClientes);
+let histClientId = null;
+function openHistorial(cid){
+  histClientId = cid;
+  $('mh-period').value = 'todo';
+  $('mh-date').value = todayKey();
+  $('mh-month').value = todayKey().slice(0,7);
+  renderHistorial();
+  $('modal-hist').classList.add('open');
+}
+function renderHistorial(){
+  const c = state.clients.find(x=>x.id===histClientId); if(!c) return;
+  const period = $('mh-period').value;
+  $('mh-date-wrap').style.display = period==='dia' ? '' : 'none';
+  $('mh-month-wrap').style.display = period==='mes' ? '' : 'none';
+  const dayKey = $('mh-date').value || todayKey();
+  const monthKey = $('mh-month').value || todayKey().slice(0,7);
+  const inRange = ts => {
+    const k = todayKey(new Date(ts));
+    if(period === 'dia') return k === dayKey;
+    if(period === 'mes') return k.slice(0,7) === monthKey;
+    return true;
+  };
+  const sales = state.sales.filter(s => s.clientId===histClientId && inRange(s.ts));
+  const abonos = state.abonos.filter(a => a.clientId===histClientId && inRange(a.ts));
+  const total = sales.reduce((t,s)=>t+s.total,0);
+  const bal = clientBalance(histClientId);
+  const suf = period==='todo' ? '' : ' (período)';
+  $('mh-title').textContent = 'Historial de ' + c.name;
+  $('mh-kpis').innerHTML = `
+    <div class="kpi"><div class="k-label">Compras${suf}</div><div class="k-value">${sales.length}</div></div>
+    <div class="kpi"><div class="k-label">Comprado${suf}</div><div class="k-value" style="font-size:17px">${fmt(total)}</div></div>
+    <div class="kpi ${bal>0.009?'red':''}"><div class="k-label">Debe (actual)</div><div class="k-value" style="font-size:17px">${fmt(Math.max(0,bal))}</div></div>`;
+  const movs = [
+    ...sales.map(s=>({ts:s.ts, det:s.items.map(it=>it.qty+'× '+it.name).join(', '), pay:PAY_LABEL[s.pay], amount:s.total, neg:false})),
+    ...abonos.map(a=>({ts:a.ts, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago de fiado', pay:'', amount:a.amount, neg:true}))
+  ].sort((a,b)=>b.ts.localeCompare(a.ts));
+  $('mh-body').innerHTML = movs.map(m=>`
+    <tr><td style="white-space:nowrap">${fmtDateTime(m.ts)}</td><td>${esc(m.det)}</td><td>${m.pay}</td>
+      <td class="num" style="color:${m.neg?'var(--ok)':'inherit'}">${m.neg?'−':''}${fmt(m.amount)}</td></tr>`).join('');
+  $('mh-empty').textContent = period==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
+  $('mh-empty').style.display = movs.length ? 'none' : 'block';
+}
+['mh-period','mh-date','mh-month'].forEach(id => $(id).addEventListener('change', renderHistorial));
+$('ma-save').addEventListener('click', ()=>{
+  const amount = Number($('ma-amount').value);
+  if(!(amount>0)){ toast('Poné un monto válido', true); return; }
+  state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: abonoClientId, amount});
+  save(); $('modal-abono').classList.remove('open'); renderAll(); toast('Pago registrado: ' + fmt(amount));
+});
+function renderFiado(){
+  // filtro por cliente (mantiene la selección al re-renderizar)
+  const keepFilter = $('fiado-filter').value;
+  $('fiado-filter').innerHTML = '<option value="">Todos los clientes</option>' +
+    state.clients.slice().sort((a,b)=>a.name.localeCompare(b.name,'es'))
+      .map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('fiado-filter').value = keepFilter;
+  const filterCid = Number($('fiado-filter').value) || null;
+
+  const totalOwed = state.clients.reduce((t,c)=>t+Math.max(0,clientBalance(c.id)),0);
+  $('fiado-kpis').innerHTML = `
+    <div class="kpi red"><div class="k-label">Total fiado por cobrar</div><div class="k-value">${fmt(totalOwed)}</div></div>
+    <div class="kpi"><div class="k-label">Clientes con deuda</div><div class="k-value">${state.clients.filter(c=>clientBalance(c.id)>0.009).length}</div></div>`;
+
+  // tickets pendientes
+  const tks = [];
+  state.clients.forEach(c => {
+    if(filterCid && c.id !== filterCid) return;
+    fiadoPendingTickets(c.id).forEach(o => tks.push({c, sale:o.sale, pending:o.pending}));
+  });
+  tks.sort((a,b)=>a.sale.ts.localeCompare(b.sale.ts));
+  $('fiado-tk-body').innerHTML = tks.map(t => `
+    <tr><td style="white-space:nowrap">${fmtDateTime(t.sale.ts)}</td>
+      <td><strong>${esc(t.c.name)}</strong></td>
+      <td>${esc(t.sale.items.map(it=>it.qty+'× '+it.name).join(', '))}</td>
+      <td class="num">${fmt(t.sale.total)}</td>
+      <td class="num">${t.pending < t.sale.total - 0.009
+        ? `<span class="pill pill-warn">${fmt(t.pending)}</span>`
+        : `<strong>${fmt(t.pending)}</strong>`}</td>
+      <td><button class="btn btn-primary btn-sm" data-paytk="${t.sale.id}" data-cid="${t.c.id}" data-amt="${t.pending}">💵 Cobrar ${fmt(t.pending)}</button></td></tr>`).join('');
+  $('fiado-tk-empty').style.display = tks.length ? 'none' : 'block';
+  $('fiado-tk-body').querySelectorAll('[data-paytk]').forEach(b => b.addEventListener('click', ()=>{
+    const cid = Number(b.dataset.cid), sid = Number(b.dataset.paytk), amt = Number(b.dataset.amt);
+    const c = state.clients.find(x=>x.id===cid);
+    if(!confirm(`¿Cobrar ${fmt(amt)} del ticket #${sid} de «${c.name}»?`)) return;
+    state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: cid, amount: amt, saleId: sid});
+    save(); renderAll(); toast('Cobrado ' + fmt(amt) + ' — ticket #' + sid);
+  }));
+
+  // clientes con cuenta
+  $('client-body').innerHTML = state.clients
+    .filter(c => !filterCid || c.id === filterCid)
+    .slice().sort((a,b)=>clientBalance(b.id)-clientBalance(a.id))
+    .map(c => {
+      const bal = clientBalance(c.id);
+      const dis = bal<=0.009 ? 'disabled style="opacity:.4"' : '';
+      return `<tr>
+        <td><strong>${esc(c.name)}</strong></td>
+        <td>${esc(c.phone||'—')}</td>
+        <td class="num">${bal>0.009?`<span class="pill pill-danger">${fmt(bal)}</span>`:`<span class="pill pill-ok">Al día</span>`}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-primary btn-sm" data-payall="${c.id}" ${dis}>✔ Cobrar todo</button>
+          <button class="btn btn-secondary btn-sm" data-abono="${c.id}" ${dis}>💵 Pago parcial</button>
+          <button class="btn btn-danger btn-sm" data-delc="${c.id}">🗑</button>
+        </td></tr>`;
+    }).join('');
+  $('client-empty').style.display = state.clients.length ? 'none' : 'block';
+  $('client-body').querySelectorAll('[data-payall]').forEach(b => b.addEventListener('click', ()=>{
+    const c = state.clients.find(x=>x.id===Number(b.dataset.payall));
+    const bal = clientBalance(c.id);
+    if(bal <= 0.009) return;
+    if(!confirm(`«${c.name}» debe ${fmt(bal)}. ¿Registrar el pago del total?`)) return;
+    state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: c.id, amount: bal});
+    save(); renderAll(); toast('Cuenta saldada: ' + fmt(bal) + ' de ' + c.name);
+  }));
+  $('client-body').querySelectorAll('[data-abono]').forEach(b => b.addEventListener('click', ()=>{
+    abonoClientId = Number(b.dataset.abono);
+    const c = state.clients.find(x=>x.id===abonoClientId);
+    $('ma-info').innerHTML = `<strong>${esc(c.name)}</strong> debe <strong>${fmt(clientBalance(c.id))}</strong>`;
+    $('ma-amount').value = '';
+    $('modal-abono').classList.add('open'); $('ma-amount').focus();
+  }));
+  $('client-body').querySelectorAll('[data-delc]').forEach(b => b.addEventListener('click', ()=> deleteClient(Number(b.dataset.delc))));
+
+  // movimientos (con filtro por día / mes)
+  const fmPeriod = $('fm-period').value;
+  $('fm-date-wrap').style.display = fmPeriod==='dia' ? '' : 'none';
+  $('fm-month-wrap').style.display = fmPeriod==='mes' ? '' : 'none';
+  let movs = fiadoMovsFiltered();
+  if(fmPeriod === 'todo') movs = movs.slice(0,20);
+  $('fiado-mov-body').innerHTML = movs.map(m=>{
+    const c = state.clients.find(x=>x.id===m.clientId);
+    return `<tr><td>${fmtDateTime(m.ts)}</td><td>${esc(c?c.name:'(eliminado)')}</td><td>${m.det}</td>
+      <td class="num" style="color:${m.neg?'var(--ok)':'var(--danger)'}">${m.neg?'−':'+'}${fmt(m.amount)}</td></tr>`;
+  }).join('');
+  $('fiado-mov-empty').textContent = fmPeriod==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
+  $('fiado-mov-empty').style.display = movs.length ? 'none' : 'block';
+}
+function fiadoMovsFiltered(){
+  const filterCid = Number($('fiado-filter').value) || null;
+  const fmPeriod = $('fm-period').value;
+  const fmDay = $('fm-date').value || todayKey();
+  const fmMonth = $('fm-month').value || todayKey().slice(0,7);
+  const inR = ts => {
+    const k = todayKey(new Date(ts));
+    if(fmPeriod === 'dia') return k === fmDay;
+    if(fmPeriod === 'mes') return k.slice(0,7) === fmMonth;
+    return true;
+  };
+  return [
+    ...state.sales.filter(s=>s.pay==='fiado' && (!filterCid || s.clientId===filterCid) && inR(s.ts))
+      .map(s=>({ts:s.ts, clientId:s.clientId, det:'Ticket #'+s.id+' — compra fiada ('+s.items.reduce((t,i)=>t+i.qty,0)+' art.)', amount:s.total, neg:false})),
+    ...state.abonos.filter(a=>(!filterCid || a.clientId===filterCid) && inR(a.ts))
+      .map(a=>({ts:a.ts, clientId:a.clientId, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago', amount:a.amount, neg:true}))
+  ].sort((a,b)=>b.ts.localeCompare(a.ts));
+}
+$('fiado-filter').addEventListener('change', renderFiado);
+['fm-period','fm-date','fm-month'].forEach(id => $(id).addEventListener('change', renderFiado));
+
+$('btn-fiado-excel').addEventListener('click', ()=>{
+  const filterCid = Number($('fiado-filter').value) || null;
+  const fc = filterCid ? state.clients.find(c=>c.id===filterCid) : null;
+  const tr = cells => '<tr>' + cells.map(c => typeof c === 'number'
+    ? `<td style="mso-number-format:'0.00'">${c.toFixed(2)}</td>` : `<td>${esc(c)}</td>`).join('') + '</tr>';
+  const rows = [];
+  rows.push('<tr><td colspan="5" style="font-weight:bold; font-size:14pt">AMADA — Fiados</td></tr>');
+  rows.push(tr(['Generado', fmtDateTime(new Date().toISOString()), fc ? 'Cliente: '+fc.name : 'Todos los clientes','','']));
+  rows.push(tr(['','','','','']));
+  rows.push(tr(['DEUDAS POR CLIENTE','','','','']));
+  rows.push(tr(['Cliente','Teléfono','Debe']));
+  let totalOwed = 0;
+  state.clients.filter(c=>!filterCid || c.id===filterCid)
+    .slice().sort((a,b)=>clientBalance(b.id)-clientBalance(a.id))
+    .forEach(c=>{
+      const bal = clientBalance(c.id);
+      if(bal > 0.009){ totalOwed += bal; rows.push(tr([c.name, c.phone||'', bal])); }
+    });
+  rows.push(tr(['TOTAL POR COBRAR','', totalOwed]));
+  rows.push(tr(['','','','','']));
+  rows.push(tr(['TICKETS PENDIENTES','','','','']));
+  rows.push(tr(['Fecha','Cliente','Detalle','Total','Pendiente']));
+  const tks = [];
+  state.clients.filter(c=>!filterCid || c.id===filterCid)
+    .forEach(c=> fiadoPendingTickets(c.id).forEach(o=> tks.push({c, o})));
+  tks.sort((a,b)=>a.o.sale.ts.localeCompare(b.o.sale.ts));
+  tks.forEach(t=> rows.push(tr([fmtDateTime(t.o.sale.ts), t.c.name,
+    t.o.sale.items.map(it=>it.qty+'x '+it.name).join(', '), t.o.sale.total, t.o.pending])));
+  rows.push(tr(['','','','','']));
+  rows.push(tr(['MOVIMIENTOS','','','','']));
+  rows.push(tr(['Fecha','Cliente','Detalle','Tipo','Monto']));
+  fiadoMovsFiltered().forEach(m=>{
+    const c = state.clients.find(x=>x.id===m.clientId);
+    rows.push(tr([fmtDateTime(m.ts), c?c.name:'(eliminado)', m.det, m.neg?'Pago':'Compra fiada', m.neg ? -m.amount : m.amount]));
+  });
+  const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1">${rows.join('')}</table></body></html>`;
+  const name = 'Fiados_AMADA_' + todayKey() + '.xls';
+  download(name, '﻿' + html, 'application/vnd.ms-excel');
+  toast('Fiados exportados: ' + name);
+});
+
+/* ================= CAJA ================= */
+function salesOfDay(key){ return state.sales.filter(s => todayKey(new Date(s.ts)) === key); }
+function dayTotals(key){
+  const t = {efectivo:0, tarjeta:0, transferencia:0, fiado:0, total:0, count:0};
+  salesOfDay(key).forEach(s => { t[s.pay] += s.total; t.total += s.total; t.count++; });
+  return t;
+}
+function renderCaja(){
+  const t = dayTotals(todayKey());
+  $('caja-kpis').innerHTML = `
+    <div class="kpi green"><div class="k-label">Vendido hoy</div><div class="k-value">${fmt(t.total)}</div></div>
+    <div class="kpi"><div class="k-label">💵 Efectivo</div><div class="k-value">${fmt(t.efectivo)}</div></div>
+    <div class="kpi"><div class="k-label">💳 Tarjeta</div><div class="k-value">${fmt(t.tarjeta)}</div></div>
+    <div class="kpi"><div class="k-label">📱 Transferencia</div><div class="k-value">${fmt(t.transferencia)}</div></div>
+    <div class="kpi"><div class="k-label">📒 Fiado</div><div class="k-value">${fmt(t.fiado)}</div></div>
+    <div class="kpi"><div class="k-label">Ventas</div><div class="k-value">${t.count}</div></div>`;
+  updateCajaDif();
+  $('cierres-body').innerHTML = state.closures.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(z => `
+    <tr><td>${fmtDate(z.date)}</td>
+      <td class="num">${fmt(z.efectivo)}</td><td class="num">${fmt(z.tarjeta)}</td>
+      <td class="num">${fmt(z.transferencia)}</td><td class="num">${fmt(z.fiado)}</td>
+      <td class="num"><strong>${fmt(z.total)}</strong></td>
+      <td class="num">${fmt(z.contado)}</td>
+      <td class="num" style="color:${Math.abs(z.dif)<0.01?'var(--ok)':'var(--danger)'}">${z.dif>0?'+':''}${fmt(z.dif)}</td>
+      <td>${esc(z.nota||'')}</td></tr>`).join('');
+  $('cierres-empty').style.display = state.closures.length ? 'none' : 'block';
+}
+function updateCajaDif(){
+  const t = dayTotals(todayKey());
+  const contado = Number($('caja-contado').value);
+  if($('caja-contado').value === '' || isNaN(contado)){ $('caja-dif-msg').textContent = 'Contá el efectivo de la caja y anotalo arriba: el sistema calcula si sobra o falta.'; return; }
+  const dif = contado - t.efectivo;
+  $('caja-dif-msg').innerHTML = Math.abs(dif) < 0.01
+    ? '✔ La caja cierra perfecta.'
+    : (dif > 0 ? `Sobran <strong>${fmt(dif)}</strong> respecto a las ventas en efectivo.` : `Faltan <strong>${fmt(-dif)}</strong> respecto a las ventas en efectivo.`);
+}
+$('caja-contado').addEventListener('input', updateCajaDif);
+$('btn-cerrar-caja').addEventListener('click', ()=>{
+  const key = todayKey();
+  const t = dayTotals(key);
+  const contado = Number($('caja-contado').value);
+  if($('caja-contado').value === '' || isNaN(contado)){ toast('Anotá el efectivo contado en caja', true); return; }
+  const existing = state.closures.find(z=>z.date===key);
+  if(existing && !confirm('Ya hay un cierre guardado para hoy. ¿Reemplazarlo?')) return;
+  const z = {id: existing ? existing.id : state.seq.z++, date:key, ts:new Date().toISOString(),
+    efectivo:t.efectivo, tarjeta:t.tarjeta, transferencia:t.transferencia, fiado:t.fiado,
+    total:t.total, contado, dif: contado - t.efectivo, nota: $('caja-nota').value.trim()};
+  if(existing) Object.assign(existing, z); else state.closures.push(z);
+  save(); $('caja-contado').value=''; $('caja-nota').value='';
+  renderCaja(); toast('Cierre de caja guardado');
+});
+
+/* ================= REPORTES ================= */
+function reportRange(){
+  const period = $('rep-period').value;
+  const base = $('rep-date').value ? dateFromKey($('rep-date').value) : new Date();
+  let start, end, label;
+  if(period === 'dia'){
+    start = new Date(base); end = new Date(base);
+    label = 'Día ' + fmtDate(todayKey(base));
+  } else if(period === 'semana'){
+    const dow = (base.getDay()+6)%7; // lunes=0
+    start = new Date(base); start.setDate(base.getDate()-dow);
+    end = new Date(start); end.setDate(start.getDate()+6);
+    label = 'Semana del ' + fmtDate(todayKey(start)) + ' al ' + fmtDate(todayKey(end));
+  } else {
+    start = new Date(base.getFullYear(), base.getMonth(), 1);
+    end = new Date(base.getFullYear(), base.getMonth()+1, 0);
+    label = base.toLocaleDateString('es-AR',{month:'long', year:'numeric'});
+    label = 'Mes de ' + label.charAt(0).toUpperCase()+label.slice(1);
+  }
+  return {start: todayKey(start), end: todayKey(end), label, period};
+}
+function salesInRange(r){
+  return state.sales.filter(s => { const k = todayKey(new Date(s.ts)); return k >= r.start && k <= r.end; });
+}
+let lastReport = null;
+function buildReport(){
+  const r = reportRange();
+  const sales = salesInRange(r);
+  const tot = {efectivo:0, tarjeta:0, transferencia:0, fiado:0, total:0, cost:0, units:0};
+  const byProduct = {};
+  const byDay = {};
+  sales.forEach(s => {
+    tot[s.pay] += s.total; tot.total += s.total;
+    const k = todayKey(new Date(s.ts));
+    byDay[k] = (byDay[k]||0) + s.total;
+    s.items.forEach(it => {
+      tot.cost += (it.cost||0)*it.qty; tot.units += it.qty;
+      if(!byProduct[it.name]) byProduct[it.name] = {qty:0, revenue:0};
+      byProduct[it.name].qty += it.qty; byProduct[it.name].revenue += it.price*it.qty;
+    });
+  });
+  tot.profit = tot.total - tot.cost;
+  const top = Object.entries(byProduct).map(([name,v])=>({name,...v})).sort((a,b)=>b.qty-a.qty);
+  lastReport = {r, sales, tot, top, byDay};
+  return lastReport;
+}
+function renderReport(){
+  const {r, sales, tot, top, byDay} = buildReport();
+  $('rep-date-label').textContent = r.period==='dia' ? 'Día' : r.period==='semana' ? 'Un día de esa semana' : 'Un día de ese mes';
+  $('rep-range-label').textContent = r.label + ' — ' + sales.length + ' venta(s)';
+  $('rep-content').style.display = 'block';
+  $('rep-kpis').innerHTML = `
+    <div class="kpi green"><div class="k-label">Total vendido</div><div class="k-value">${fmt(tot.total)}</div></div>
+    <div class="kpi"><div class="k-label">Ganancia estimada</div><div class="k-value">${fmt(tot.profit)}</div></div>
+    <div class="kpi"><div class="k-label">Ventas</div><div class="k-value">${sales.length}</div></div>
+    <div class="kpi"><div class="k-label">Unidades</div><div class="k-value">${tot.units}</div></div>
+    <div class="kpi"><div class="k-label">💵 Efectivo</div><div class="k-value">${fmt(tot.efectivo)}</div></div>
+    <div class="kpi"><div class="k-label">💳+📱</div><div class="k-value">${fmt(tot.tarjeta+tot.transferencia)}</div></div>
+    <div class="kpi"><div class="k-label">📒 Fiado</div><div class="k-value">${fmt(tot.fiado)}</div></div>`;
+  renderChart(r, byDay);
+  // top vendidos
+  $('rep-top-body').innerHTML = top.slice(0,10).map((p,i)=>`
+    <tr><td>${i+1}</td><td>${esc(p.name)}</td><td class="num">${p.qty}</td><td class="num">${fmt(p.revenue)}</td></tr>`).join('');
+  $('rep-top-empty').style.display = top.length ? 'none' : 'block';
+  // lentos: productos con stock que no se vendieron o vendieron poco
+  const soldNames = new Set(top.map(p=>p.name));
+  const slow = state.products.filter(p=>p.stock>0)
+    .map(p => ({name:p.name, stock:p.stock, qty: (top.find(t=>t.name===p.name)||{qty:0}).qty}))
+    .sort((a,b)=>a.qty-b.qty).slice(0,10);
+  $('rep-slow-body').innerHTML = slow.map(p=>`
+    <tr><td>${esc(p.name)}</td><td class="num">${p.qty}</td><td class="num">${p.stock}</td></tr>`).join('');
+  $('rep-slow-empty').style.display = slow.length ? 'none' : 'block';
+  // detalle
+  $('rep-sales-body').innerHTML = sales.slice().sort((a,b)=>b.ts.localeCompare(a.ts)).map(s=>`
+    <tr><td>${fmtDateTime(s.ts)}</td>
+      <td>${s.items.map(it=>it.qty+'× '+esc(it.name)).join(', ')}</td>
+      <td>${PAY_LABEL[s.pay]}</td><td class="num"><strong>${fmt(s.total)}</strong></td></tr>`).join('')
+    || '<tr><td colspan="4" class="empty">Sin ventas en este período.</td></tr>';
+}
+function renderChart(r, byDay){
+  const days = [];
+  let d = dateFromKey(r.start);
+  const end = dateFromKey(r.end);
+  while(d <= end){ days.push(todayKey(d)); d = new Date(d); d.setDate(d.getDate()+1); }
+  $('rep-chart-title').textContent = r.period==='dia' ? 'Ventas del día' : 'Ventas por día';
+  if(r.period === 'dia'){
+    // por hora
+    const byHour = {};
+    salesInRange(r).forEach(s => { const h = new Date(s.ts).getHours(); byHour[h]=(byHour[h]||0)+s.total; });
+    const hours = Object.keys(byHour).map(Number).sort((a,b)=>a-b);
+    if(!hours.length){ $('rep-chart').innerHTML = '<div class="empty">Sin ventas para graficar.</div>'; return; }
+    const lo = Math.min(...hours), hi = Math.max(...hours);
+    const labels = [], values = [];
+    for(let h=lo; h<=hi; h++){ labels.push(h+'h'); values.push(byHour[h]||0); }
+    $('rep-chart').innerHTML = svgBars(labels, values);
+  } else {
+    const labels = days.map(k => { const dd = dateFromKey(k); return r.period==='semana'
+      ? ['Lu','Ma','Mi','Ju','Vi','Sá','Do'][(dd.getDay()+6)%7] + ' ' + dd.getDate()
+      : String(dd.getDate()); });
+    const values = days.map(k => byDay[k]||0);
+    if(!values.some(v=>v>0)){ $('rep-chart').innerHTML = '<div class="empty">Sin ventas para graficar.</div>'; return; }
+    $('rep-chart').innerHTML = svgBars(labels, values);
+  }
+}
+function svgBars(labels, values){
+  const n = values.length;
+  const barW = Math.max(18, Math.min(56, Math.floor(760/n) - 8));
+  const gap = 8, padL = 8, padTop = 26, padBot = 34, H = 220;
+  const W = padL*2 + n*(barW+gap);
+  const max = Math.max(...values, 1);
+  const chartH = H - padTop - padBot;
+  let out = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img">`;
+  values.forEach((v,i)=>{
+    const h = Math.round(v/max*chartH);
+    const x = padL + i*(barW+gap);
+    const y = padTop + (chartH - h);
+    out += `<rect class="bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h, v>0?2:0)}" rx="3"><title>${labels[i]}: ${fmt(v)}</title></rect>`;
+    if(v>0 && n <= 16) out += `<text class="bar-value" x="${x+barW/2}" y="${y-6}" text-anchor="middle">${v>=1000 ? '$'+Math.round(v/1000)+'k' : '$'+Math.round(v)}</text>`;
+    if(n <= 31) out += `<text class="bar-label" x="${x+barW/2}" y="${H-12}" text-anchor="middle">${labels[i]}</text>`;
+  });
+  out += '</svg>';
+  return out;
+}
+$('rep-period').addEventListener('change', renderReport);
+$('rep-date').addEventListener('change', renderReport);
+function shiftReport(dir){
+  const period = $('rep-period').value;
+  const base = $('rep-date').value ? dateFromKey($('rep-date').value) : new Date();
+  if(period === 'dia') base.setDate(base.getDate() + dir);
+  else if(period === 'semana') base.setDate(base.getDate() + 7*dir);
+  else { base.setDate(1); base.setMonth(base.getMonth() + dir); }
+  $('rep-date').value = todayKey(base);
+  renderReport();
+}
+$('btn-rep-prev').addEventListener('click', ()=> shiftReport(-1));
+$('btn-rep-next').addEventListener('click', ()=> shiftReport(1));
+$('btn-rep-hoy').addEventListener('click', ()=>{ $('rep-date').value = todayKey(); renderReport(); });
+
+/* ---- Exportar a Excel ---- */
+$('btn-rep-excel').addEventListener('click', ()=>{
+  const {r, sales, tot, top} = buildReport();
+  const rows = [];
+  const tr = cells => '<tr>' + cells.map(c => typeof c === 'number'
+    ? `<td style="mso-number-format:'0.00'">${c.toFixed(2)}</td>` : `<td>${esc(c)}</td>`).join('') + '</tr>';
+  rows.push(`<tr><td colspan="5" style="font-weight:bold; font-size:14pt">AMADA — Reporte de ventas</td></tr>`);
+  rows.push(tr([r.label,'','','','']));
+  rows.push(tr(['','','','','']));
+  rows.push(tr(['RESUMEN','','','','']));
+  rows.push(tr(['Total vendido', tot.total])); rows.push(tr(['Ganancia estimada', tot.profit]));
+  rows.push(tr(['Cantidad de ventas', sales.length])); rows.push(tr(['Unidades vendidas', tot.units]));
+  rows.push(tr(['Efectivo', tot.efectivo])); rows.push(tr(['Tarjeta', tot.tarjeta]));
+  rows.push(tr(['Transferencia', tot.transferencia])); rows.push(tr(['Fiado', tot.fiado]));
+  rows.push(tr(['','','','','']));
+  rows.push(tr(['MÁS VENDIDOS','','','','']));
+  rows.push(tr(['Producto','Unidades','Vendido']));
+  top.forEach(p => rows.push(tr([p.name, p.qty, p.revenue])));
+  rows.push(tr(['','','','','']));
+  rows.push(tr(['DETALLE DE VENTAS','','','','']));
+  rows.push(tr(['Fecha y hora','Productos','Medio de pago','Total']));
+  sales.forEach(s => rows.push(tr([fmtDateTime(s.ts), s.items.map(it=>it.qty+'x '+it.name).join(', '), PAY_LABEL[s.pay], s.total])));
+  const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1">${rows.join('')}</table></body></html>`;
+  const name = 'Reporte_AMADA_' + r.start + (r.start!==r.end ? '_a_' + r.end : '') + '.xls';
+  download(name, '﻿' + html, 'application/vnd.ms-excel');
+  toast('Reporte descargado: ' + name);
+});
+
+/* ================= IMPORTAR CSV ================= */
+function normH(s){ return String(s||'').replace(/^﻿/,'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function firstIdx(header, names){ for(const n of names){ const i = header.indexOf(n); if(i>=0) return i; } return -1; }
+function parseNum(s){
+  s = String(s??'').trim().replace(/[$\s]/g,'');
+  if(!s) return NaN;
+  if(s.includes(',') && s.includes('.')) s = s.replace(/\./g,'').replace(',', '.');
+  else if(s.includes(',')) s = s.replace(',', '.');
+  return Number(s);
+}
+function parseCSV(text){
+  text = text.replace(/^﻿/,'');
+  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim() !== '');
+  if(!lines.length) return [];
+  const sep = (lines[0].match(/;/g)||[]).length >= (lines[0].match(/,/g)||[]).length ? ';' : ',';
+  return lines.map(line => {
+    const out = []; let cur = '', inQ = false;
+    for(let i=0; i<line.length; i++){
+      const ch = line[i];
+      if(inQ){
+        if(ch === '"'){ if(line[i+1] === '"'){ cur += '"'; i++; } else inQ = false; }
+        else cur += ch;
+      } else {
+        if(ch === '"') inQ = true;
+        else if(ch === sep){ out.push(cur); cur = ''; }
+        else cur += ch;
+      }
+    }
+    out.push(cur);
+    return out.map(c => c.trim());
+  });
+}
+function readFileSmart(f, cb){
+  const r = new FileReader();
+  r.onload = () => {
+    if(String(r.result).includes('�')){
+      const r2 = new FileReader();
+      r2.onload = () => cb(String(r2.result));
+      r2.readAsText(f, 'windows-1252');
+    } else cb(String(r.result));
+  };
+  r.readAsText(f, 'UTF-8');
+}
+let importApply = null;
+function openImportPreview(title, lines, errs, count, applyFn){
+  $('mi-title').textContent = title;
+  let html = lines.map(l => '<div>' + esc(l) + '</div>').join('');
+  if(errs.length){
+    html += '<div style="margin-top:10px; color:var(--danger)"><strong>⚠ ' + errs.length + ' fila(s) con problemas — se saltean:</strong>' +
+      errs.slice(0,10).map(e => '<div>' + esc(e) + '</div>').join('') +
+      (errs.length > 10 ? '<div>… y ' + (errs.length-10) + ' más</div>' : '') + '</div>';
+  }
+  if(!count) html += '<div class="empty">No hay nada válido para importar. Revisá el archivo o descargá la plantilla de ejemplo.</div>';
+  $('mi-summary').innerHTML = html;
+  $('mi-apply').style.display = count ? '' : 'none';
+  importApply = count ? applyFn : null;
+  $('modal-import').classList.add('open');
+}
+$('mi-apply').addEventListener('click', () => {
+  if(importApply) importApply();
+  importApply = null;
+  $('modal-import').classList.remove('open');
+  save(); renderAll();
+});
+
+function importProductsCSV(rows){
+  if(rows.length < 2){ toast('El CSV necesita una fila de encabezado y al menos un producto', true); return; }
+  const h = rows[0].map(normH);
+  const iName = firstIdx(h, ['nombre','producto']);
+  const iPrice = firstIdx(h, ['precio','precio de venta','precio venta']);
+  const iCost = firstIdx(h, ['costo','precio de costo']);
+  const iCat = firstIdx(h, ['categoria']);
+  const iStock = firstIdx(h, ['stock','cantidad']);
+  const iMin = firstIdx(h, ['minimo','stock minimo']);
+  if(iName < 0 || iPrice < 0){ toast('El CSV necesita al menos las columnas «nombre» y «precio»', true); return; }
+  const acts = [], errs = [], seen = new Set();
+  rows.slice(1).forEach((r, n) => {
+    const line = n + 2;
+    const name = (r[iName]||'').trim();
+    if(!name){ errs.push('Fila ' + line + ': sin nombre'); return; }
+    if(seen.has(normH(name))){ errs.push('Fila ' + line + ' («' + name + '»): repetido en el archivo'); return; }
+    seen.add(normH(name));
+    const price = parseNum(r[iPrice]);
+    const existing = state.products.find(p => normH(p.name) === normH(name));
+    if(!existing && !(price > 0)){ errs.push('Fila ' + line + ' («' + name + '»): precio inválido'); return; }
+    const stock = iStock >= 0 ? parseNum(r[iStock]) : NaN;
+    acts.push({name, existing, price,
+      cost: iCost >= 0 ? parseNum(r[iCost]) : NaN,
+      cat: iCat >= 0 ? (r[iCat]||'').trim() : '',
+      stock: isNaN(stock) ? 0 : Math.max(0, Math.round(stock)),
+      min: iMin >= 0 ? parseNum(r[iMin]) : NaN});
+  });
+  const news = acts.filter(a => !a.existing).length, upds = acts.length - news;
+  const lines = [];
+  if(news) lines.push('✅ Se crean ' + news + ' producto(s) nuevo(s).');
+  if(upds) lines.push('✏ ' + upds + ' ya existen: se actualizan precio, costo y categoría, y el stock del archivo se SUMA al actual.');
+  openImportPreview('Importar productos', lines, errs, acts.length, () => {
+    acts.forEach(a => {
+      if(a.existing){
+        if(a.price > 0) a.existing.price = a.price;
+        if(!isNaN(a.cost)) a.existing.cost = a.cost;
+        if(a.cat) a.existing.cat = a.cat;
+        if(!isNaN(a.min)) a.existing.min = Math.max(0, Math.round(a.min));
+        a.existing.stock += a.stock;
+      } else {
+        state.products.push({id: state.seq.p++, name: a.name, cat: a.cat,
+          cost: isNaN(a.cost) ? 0 : a.cost, price: a.price, stock: a.stock,
+          min: isNaN(a.min) ? 3 : Math.max(0, Math.round(a.min))});
+      }
+    });
+    toast('Importación lista: ' + news + ' nuevo(s), ' + upds + ' actualizado(s)');
+  });
+}
+
+function importStockCSV(rows){
+  if(rows.length < 2){ toast('El CSV necesita una fila de encabezado y al menos un producto', true); return; }
+  const h = rows[0].map(normH);
+  const iName = firstIdx(h, ['nombre','producto']);
+  const iQty = firstIdx(h, ['cantidad','stock','sumar']);
+  if(iName < 0 || iQty < 0){ toast('El CSV necesita las columnas «nombre» y «cantidad»', true); return; }
+  const acts = [], errs = [];
+  rows.slice(1).forEach((r, n) => {
+    const line = n + 2;
+    const name = (r[iName]||'').trim();
+    if(!name) return;
+    const p = state.products.find(x => normH(x.name) === normH(name));
+    const qty = parseNum(r[iQty]);
+    if(!p){ errs.push('Fila ' + line + ': «' + name + '» no existe en Productos (cargalo primero)'); return; }
+    if(isNaN(qty) || qty === 0){ errs.push('Fila ' + line + ' («' + name + '»): cantidad inválida'); return; }
+    acts.push({p, qty: Math.round(qty)});
+  });
+  const total = acts.reduce((t,a) => t + a.qty, 0);
+  const lines = [];
+  if(acts.length){
+    lines.push('Se suma stock a ' + acts.length + ' producto(s), ' + total + ' unidades en total:');
+    acts.slice(0,15).forEach(a => lines.push('  • ' + a.p.name + ': ' + a.p.stock + ' → ' + Math.max(0, a.p.stock + a.qty)));
+    if(acts.length > 15) lines.push('  … y ' + (acts.length - 15) + ' más');
+  }
+  openImportPreview('Sumar stock', lines, errs, acts.length, () => {
+    acts.forEach(a => { a.p.stock = Math.max(0, a.p.stock + a.qty); });
+    toast('Stock actualizado en ' + acts.length + ' producto(s)');
+  });
+}
+
+function importClientsCSV(rows){
+  if(rows.length < 2){ toast('El CSV necesita una fila de encabezado y al menos un cliente', true); return; }
+  const h = rows[0].map(normH);
+  const iName = firstIdx(h, ['nombre','cliente']);
+  const iPhone = firstIdx(h, ['telefono','tel','celular']);
+  const iNotes = firstIdx(h, ['nota','notas','observaciones']);
+  if(iName < 0){ toast('El CSV necesita la columna «nombre»', true); return; }
+  const acts = [], errs = [], seen = new Set();
+  rows.slice(1).forEach((r, n) => {
+    const line = n + 2;
+    const name = (r[iName]||'').trim();
+    if(!name){ errs.push('Fila ' + line + ': sin nombre'); return; }
+    if(seen.has(normH(name))){ errs.push('Fila ' + line + ' («' + name + '»): repetido en el archivo'); return; }
+    seen.add(normH(name));
+    acts.push({name,
+      existing: state.clients.find(c => normH(c.name) === normH(name)),
+      phone: iPhone >= 0 ? (r[iPhone]||'').trim() : '',
+      notes: iNotes >= 0 ? (r[iNotes]||'').trim() : ''});
+  });
+  const news = acts.filter(a => !a.existing).length, upds = acts.length - news;
+  const lines = [];
+  if(news) lines.push('✅ Se crean ' + news + ' cliente(s) nuevo(s).');
+  if(upds) lines.push('✏ ' + upds + ' ya existen: se actualizan teléfono y nota.');
+  openImportPreview('Importar clientes', lines, errs, acts.length, () => {
+    acts.forEach(a => {
+      if(a.existing){
+        if(a.phone) a.existing.phone = a.phone;
+        if(a.notes) a.existing.notes = a.notes;
+      } else {
+        state.clients.push({id: state.seq.c++, name: a.name, phone: a.phone, notes: a.notes});
+      }
+    });
+    toast('Importación lista: ' + news + ' nuevo(s), ' + upds + ' actualizado(s)');
+  });
+}
+
+function hookCSV(btnId, fileId, handler){
+  $(btnId).addEventListener('click', () => $(fileId).click());
+  $(fileId).addEventListener('change', e => {
+    const f = e.target.files[0]; if(!f) return;
+    readFileSmart(f, text => {
+      try{ handler(parseCSV(text)); }
+      catch(err){ toast('No se pudo leer el archivo CSV', true); }
+    });
+    e.target.value = '';
+  });
+}
+hookCSV('btn-imp-prod', 'imp-prod-file', importProductsCSV);
+hookCSV('btn-imp-stock', 'imp-stock-file', importStockCSV);
+hookCSV('btn-imp-cli', 'imp-cli-file', importClientsCSV);
+
+const CSV_TEMPLATES = {
+  productos: ['plantilla_productos.csv', 'nombre;categoria;costo;precio;stock;minimo\nCoca Cola 1.5L;Bebidas;1200;1800;10;3\nPan Lactal;Almacén;900;1500;5;2'],
+  stock: ['plantilla_stock.csv', 'nombre;cantidad\nCoca Cola 1.5L;12\nPan Lactal;6'],
+  clientes: ['plantilla_clientes.csv', 'nombre;telefono;nota\nDoña Rosa;11-5555-1234;paga los viernes\nCarlos;;']
+};
+document.querySelectorAll('[data-tpl]').forEach(el => el.addEventListener('click', e => {
+  e.preventDefault();
+  const [name, content] = CSV_TEMPLATES[el.dataset.tpl];
+  download(name, '﻿' + content, 'text/csv;charset=utf-8');
+  toast('Plantilla descargada: ' + name);
+}));
+
+/* ================= RESPALDO ================= */
+$('btn-backup').addEventListener('click', ()=>{
+  state.lastBackup = new Date().toISOString();
+  save();
+  download('Respaldo_AMADA_' + todayKey() + '.json', JSON.stringify(state, null, 1), 'application/json');
+  renderRespaldo();
+  toast('Copia de seguridad descargada');
+});
+$('btn-restore').addEventListener('click', ()=> $('restore-file').click());
+$('restore-file').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data.products || !data.sales || !data.seq) throw new Error('El archivo se pudo leer pero no tiene el formato de una copia de AMADA');
+      if(!confirm(`El archivo tiene ${data.products.length} productos y ${data.sales.length} ventas.\n\n⚠ Esto REEMPLAZA todos los datos actuales. ¿Continuar?`)) return;
+      state = data; save(); renderAll();
+      toast('Datos restaurados correctamente');
+    }catch(err){
+      console.error('Error al restaurar:', err);
+      toast('No se pudo restaurar: ' + (err && err.message ? err.message : 'archivo inválido'), true);
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(f);
+});
+const DEMO_DATA = {"products":[{"id":1,"name":"Coca Cola 1.5L","cat":"Bebidas","cost":1900,"price":2800,"stock":22,"min":4},{"id":2,"name":"Agua sin gas 2L","cat":"Bebidas","cost":700,"price":1100,"stock":31,"min":4},{"id":3,"name":"Cerveza rubia 1L","cat":"Bebidas","cost":1800,"price":2600,"stock":33,"min":6},{"id":4,"name":"Jugo de naranja 1L","cat":"Bebidas","cost":900,"price":1400,"stock":31,"min":3},{"id":5,"name":"Yerba mate 1kg","cat":"Almac\u00e9n","cost":3200,"price":4800,"stock":14,"min":4},{"id":6,"name":"Az\u00facar 1kg","cat":"Almac\u00e9n","cost":900,"price":1400,"stock":13,"min":5},{"id":7,"name":"Arroz 1kg","cat":"Almac\u00e9n","cost":1100,"price":1700,"stock":21,"min":5},{"id":8,"name":"Fideos 500g","cat":"Almac\u00e9n","cost":800,"price":1300,"stock":8,"min":5},{"id":9,"name":"Aceite girasol 900ml","cat":"Almac\u00e9n","cost":1900,"price":2900,"stock":22,"min":3},{"id":10,"name":"Harina 000 1kg","cat":"Almac\u00e9n","cost":700,"price":1100,"stock":25,"min":4},{"id":11,"name":"Pan lactal","cat":"Almac\u00e9n","cost":1400,"price":2100,"stock":2,"min":3},{"id":12,"name":"Galletitas surtidas","cat":"Almac\u00e9n","cost":700,"price":1200,"stock":15,"min":4},{"id":13,"name":"Caf\u00e9 molido 250g","cat":"Almac\u00e9n","cost":2800,"price":4200,"stock":30,"min":2},{"id":14,"name":"Leche entera 1L","cat":"Almac\u00e9n","cost":1000,"price":1500,"stock":21,"min":6},{"id":15,"name":"Huevos x12","cat":"Almac\u00e9n","cost":2200,"price":3300,"stock":1,"min":3},{"id":16,"name":"Mermelada de durazno","cat":"Almac\u00e9n","cost":1300,"price":2000,"stock":28,"min":2},{"id":17,"name":"Lavandina 1L","cat":"Limpieza","cost":800,"price":1300,"stock":22,"min":3},{"id":18,"name":"Detergente 750ml","cat":"Limpieza","cost":1200,"price":1900,"stock":22,"min":3},{"id":19,"name":"Jab\u00f3n en polvo 800g","cat":"Limpieza","cost":1800,"price":2800,"stock":20,"min":2},{"id":20,"name":"Papel higi\u00e9nico x4","cat":"Limpieza","cost":1500,"price":2300,"stock":34,"min":4},{"id":21,"name":"Esponja de cocina","cat":"Limpieza","cost":300,"price":600,"stock":19,"min":3},{"id":22,"name":"Alfajor triple","cat":"Golosinas","cost":500,"price":800,"stock":22,"min":6},{"id":23,"name":"Chocolate con leche","cat":"Golosinas","cost":1200,"price":1900,"stock":26,"min":3},{"id":24,"name":"Caramelos surtidos","cat":"Golosinas","cost":600,"price":1000,"stock":25,"min":3}],"clients":[{"id":1,"name":"Do\u00f1a Rosa","phone":"11-5555-1234","notes":"paga los viernes"},{"id":2,"name":"Carlos","phone":"11-4444-0000","notes":""},{"id":3,"name":"Marta","phone":"","notes":"vecina del 2do"},{"id":4,"name":"El Flaco","phone":"11-6666-7777","notes":"de la obra de la esquina"},{"id":5,"name":"Susana","phone":"","notes":""},{"id":6,"name":"Don Pedro","phone":"11-2222-3333","notes":"jubilado, viene a la ma\u00f1ana"}],"sales":[{"id":1,"ts":"2026-08-01T12:57:00","items":[{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":2}],"total":2200,"pay":"fiado","clientId":5},{"id":2,"ts":"2026-08-01T08:47:00","items":[{"pid":24,"name":"Caramelos surtidos","price":1000,"cost":600,"qty":2}],"total":2000,"pay":"efectivo","clientId":4},{"id":3,"ts":"2026-08-02T11:36:00","items":[{"pid":22,"name":"Alfajor triple","price":800,"cost":500,"qty":1},{"pid":11,"name":"Pan lactal","price":2100,"cost":1400,"qty":3},{"pid":8,"name":"Fideos 500g","price":1300,"cost":800,"qty":1}],"total":8400,"pay":"efectivo","clientId":null},{"id":4,"ts":"2026-08-02T16:31:00","items":[{"pid":19,"name":"Jab\u00f3n en polvo 800g","price":2800,"cost":1800,"qty":2}],"total":5600,"pay":"fiado","clientId":5},{"id":5,"ts":"2026-08-02T18:05:00","items":[{"pid":16,"name":"Mermelada de durazno","price":2000,"cost":1300,"qty":3}],"total":6000,"pay":"efectivo","clientId":null},{"id":6,"ts":"2026-08-03T11:03:00","items":[{"pid":10,"name":"Harina 000 1kg","price":1100,"cost":700,"qty":3}],"total":3300,"pay":"efectivo","clientId":3},{"id":7,"ts":"2026-08-03T16:33:00","items":[{"pid":18,"name":"Detergente 750ml","price":1900,"cost":1200,"qty":2},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":2}],"total":9600,"pay":"efectivo","clientId":null},{"id":8,"ts":"2026-08-04T12:00:00","items":[{"pid":8,"name":"Fideos 500g","price":1300,"cost":800,"qty":3}],"total":3900,"pay":"tarjeta","clientId":5},{"id":9,"ts":"2026-08-05T10:07:00","items":[{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":2},{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":3}],"total":6300,"pay":"transferencia","clientId":null},{"id":10,"ts":"2026-08-06T16:48:00","items":[{"pid":12,"name":"Galletitas surtidas","price":1200,"cost":700,"qty":3}],"total":3600,"pay":"efectivo","clientId":null},{"id":11,"ts":"2026-08-06T10:49:00","items":[{"pid":17,"name":"Lavandina 1L","price":1300,"cost":800,"qty":2},{"pid":19,"name":"Jab\u00f3n en polvo 800g","price":2800,"cost":1800,"qty":2},{"pid":7,"name":"Arroz 1kg","price":1700,"cost":1100,"qty":2}],"total":11600,"pay":"transferencia","clientId":null},{"id":12,"ts":"2026-08-06T09:37:00","items":[{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":1},{"pid":15,"name":"Huevos x12","price":3300,"cost":2200,"qty":3},{"pid":18,"name":"Detergente 750ml","price":1900,"cost":1200,"qty":3}],"total":17100,"pay":"tarjeta","clientId":3},{"id":13,"ts":"2026-08-06T18:50:00","items":[{"pid":7,"name":"Arroz 1kg","price":1700,"cost":1100,"qty":1},{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":1}],"total":3200,"pay":"efectivo","clientId":null},{"id":14,"ts":"2026-08-06T09:25:00","items":[{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":2},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":2}],"total":8800,"pay":"efectivo","clientId":null},{"id":15,"ts":"2026-08-07T16:17:00","items":[{"pid":8,"name":"Fideos 500g","price":1300,"cost":800,"qty":1},{"pid":5,"name":"Yerba mate 1kg","price":4800,"cost":3200,"qty":1}],"total":6100,"pay":"fiado","clientId":5},{"id":16,"ts":"2026-08-07T18:04:00","items":[{"pid":18,"name":"Detergente 750ml","price":1900,"cost":1200,"qty":2},{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":1}],"total":5300,"pay":"tarjeta","clientId":null},{"id":17,"ts":"2026-08-08T17:34:00","items":[{"pid":15,"name":"Huevos x12","price":3300,"cost":2200,"qty":2}],"total":6600,"pay":"tarjeta","clientId":5},{"id":18,"ts":"2026-08-09T10:45:00","items":[{"pid":4,"name":"Jugo de naranja 1L","price":1400,"cost":900,"qty":3}],"total":4200,"pay":"transferencia","clientId":null},{"id":19,"ts":"2026-08-10T10:09:00","items":[{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":3},{"pid":24,"name":"Caramelos surtidos","price":1000,"cost":600,"qty":1},{"pid":17,"name":"Lavandina 1L","price":1300,"cost":800,"qty":1}],"total":11000,"pay":"transferencia","clientId":2},{"id":20,"ts":"2026-08-11T09:19:00","items":[{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":1}],"total":600,"pay":"efectivo","clientId":null},{"id":21,"ts":"2026-08-11T09:42:00","items":[{"pid":19,"name":"Jab\u00f3n en polvo 800g","price":2800,"cost":1800,"qty":1}],"total":2800,"pay":"efectivo","clientId":null},{"id":22,"ts":"2026-08-12T17:30:00","items":[{"pid":15,"name":"Huevos x12","price":3300,"cost":2200,"qty":3},{"pid":11,"name":"Pan lactal","price":2100,"cost":1400,"qty":2}],"total":14100,"pay":"fiado","clientId":3},{"id":23,"ts":"2026-08-12T14:16:00","items":[{"pid":6,"name":"Az\u00facar 1kg","price":1400,"cost":900,"qty":3}],"total":4200,"pay":"fiado","clientId":1},{"id":24,"ts":"2026-08-12T17:51:00","items":[{"pid":24,"name":"Caramelos surtidos","price":1000,"cost":600,"qty":1}],"total":1000,"pay":"efectivo","clientId":null},{"id":25,"ts":"2026-08-12T10:21:00","items":[{"pid":5,"name":"Yerba mate 1kg","price":4800,"cost":3200,"qty":2}],"total":9600,"pay":"efectivo","clientId":null},{"id":26,"ts":"2026-08-13T16:36:00","items":[{"pid":1,"name":"Coca Cola 1.5L","price":2800,"cost":1900,"qty":3},{"pid":20,"name":"Papel higi\u00e9nico x4","price":2300,"cost":1500,"qty":3}],"total":15300,"pay":"transferencia","clientId":null},{"id":27,"ts":"2026-08-13T16:55:00","items":[{"pid":22,"name":"Alfajor triple","price":800,"cost":500,"qty":1},{"pid":11,"name":"Pan lactal","price":2100,"cost":1400,"qty":2},{"pid":5,"name":"Yerba mate 1kg","price":4800,"cost":3200,"qty":2}],"total":14600,"pay":"efectivo","clientId":null},{"id":28,"ts":"2026-08-13T08:57:00","items":[{"pid":20,"name":"Papel higi\u00e9nico x4","price":2300,"cost":1500,"qty":2},{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":2},{"pid":17,"name":"Lavandina 1L","price":1300,"cost":800,"qty":2}],"total":10200,"pay":"transferencia","clientId":null},{"id":29,"ts":"2026-08-14T12:07:00","items":[{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":2},{"pid":3,"name":"Cerveza rubia 1L","price":2600,"cost":1800,"qty":3},{"pid":6,"name":"Az\u00facar 1kg","price":1400,"cost":900,"qty":3}],"total":13200,"pay":"efectivo","clientId":null},{"id":30,"ts":"2026-08-15T08:26:00","items":[{"pid":23,"name":"Chocolate con leche","price":1900,"cost":1200,"qty":2}],"total":3800,"pay":"efectivo","clientId":null},{"id":31,"ts":"2026-08-15T10:44:00","items":[{"pid":11,"name":"Pan lactal","price":2100,"cost":1400,"qty":3},{"pid":22,"name":"Alfajor triple","price":800,"cost":500,"qty":3}],"total":8700,"pay":"efectivo","clientId":null},{"id":32,"ts":"2026-08-15T17:32:00","items":[{"pid":1,"name":"Coca Cola 1.5L","price":2800,"cost":1900,"qty":3},{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":1}],"total":9500,"pay":"transferencia","clientId":null},{"id":33,"ts":"2026-08-16T16:13:00","items":[{"pid":12,"name":"Galletitas surtidas","price":1200,"cost":700,"qty":2},{"pid":3,"name":"Cerveza rubia 1L","price":2600,"cost":1800,"qty":3},{"pid":19,"name":"Jab\u00f3n en polvo 800g","price":2800,"cost":1800,"qty":1}],"total":13000,"pay":"efectivo","clientId":null},{"id":34,"ts":"2026-08-17T11:42:00","items":[{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":2},{"pid":4,"name":"Jugo de naranja 1L","price":1400,"cost":900,"qty":1}],"total":7200,"pay":"efectivo","clientId":null},{"id":35,"ts":"2026-08-18T10:24:00","items":[{"pid":12,"name":"Galletitas surtidas","price":1200,"cost":700,"qty":1}],"total":1200,"pay":"tarjeta","clientId":4},{"id":36,"ts":"2026-08-18T09:14:00","items":[{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":1},{"pid":15,"name":"Huevos x12","price":3300,"cost":2200,"qty":2},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":1}],"total":11000,"pay":"efectivo","clientId":null},{"id":37,"ts":"2026-08-18T16:57:00","items":[{"pid":5,"name":"Yerba mate 1kg","price":4800,"cost":3200,"qty":2},{"pid":3,"name":"Cerveza rubia 1L","price":2600,"cost":1800,"qty":3},{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":2}],"total":19600,"pay":"efectivo","clientId":null},{"id":38,"ts":"2026-08-19T12:55:00","items":[{"pid":7,"name":"Arroz 1kg","price":1700,"cost":1100,"qty":1},{"pid":24,"name":"Caramelos surtidos","price":1000,"cost":600,"qty":2}],"total":3700,"pay":"tarjeta","clientId":null},{"id":39,"ts":"2026-08-20T14:42:00","items":[{"pid":10,"name":"Harina 000 1kg","price":1100,"cost":700,"qty":1},{"pid":6,"name":"Az\u00facar 1kg","price":1400,"cost":900,"qty":2}],"total":3900,"pay":"transferencia","clientId":1},{"id":40,"ts":"2026-08-20T08:21:00","items":[{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":3},{"pid":22,"name":"Alfajor triple","price":800,"cost":500,"qty":3}],"total":4200,"pay":"efectivo","clientId":null},{"id":41,"ts":"2026-08-20T09:26:00","items":[{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":1},{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":3}],"total":4700,"pay":"efectivo","clientId":null},{"id":42,"ts":"2026-08-21T18:09:00","items":[{"pid":23,"name":"Chocolate con leche","price":1900,"cost":1200,"qty":1},{"pid":7,"name":"Arroz 1kg","price":1700,"cost":1100,"qty":1}],"total":3600,"pay":"efectivo","clientId":null},{"id":43,"ts":"2026-08-22T09:42:00","items":[{"pid":1,"name":"Coca Cola 1.5L","price":2800,"cost":1900,"qty":2}],"total":5600,"pay":"efectivo","clientId":null},{"id":44,"ts":"2026-08-22T18:11:00","items":[{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":3},{"pid":13,"name":"Caf\u00e9 molido 250g","price":4200,"cost":2800,"qty":2}],"total":11700,"pay":"fiado","clientId":4},{"id":45,"ts":"2026-08-22T18:36:00","items":[{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":3},{"pid":18,"name":"Detergente 750ml","price":1900,"cost":1200,"qty":2},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":3}],"total":14300,"pay":"efectivo","clientId":null},{"id":46,"ts":"2026-08-23T08:19:00","items":[{"pid":17,"name":"Lavandina 1L","price":1300,"cost":800,"qty":2},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":3}],"total":11300,"pay":"transferencia","clientId":null},{"id":47,"ts":"2026-08-23T08:50:00","items":[{"pid":20,"name":"Papel higi\u00e9nico x4","price":2300,"cost":1500,"qty":1},{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":1},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":2}],"total":9200,"pay":"efectivo","clientId":1},{"id":48,"ts":"2026-08-23T14:35:00","items":[{"pid":22,"name":"Alfajor triple","price":800,"cost":500,"qty":3}],"total":2400,"pay":"efectivo","clientId":null},{"id":49,"ts":"2026-08-24T09:23:00","items":[{"pid":23,"name":"Chocolate con leche","price":1900,"cost":1200,"qty":2}],"total":3800,"pay":"efectivo","clientId":4},{"id":50,"ts":"2026-08-24T12:16:00","items":[{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":3},{"pid":24,"name":"Caramelos surtidos","price":1000,"cost":600,"qty":3},{"pid":10,"name":"Harina 000 1kg","price":1100,"cost":700,"qty":1}],"total":5900,"pay":"efectivo","clientId":null},{"id":51,"ts":"2026-08-24T15:27:00","items":[{"pid":16,"name":"Mermelada de durazno","price":2000,"cost":1300,"qty":1}],"total":2000,"pay":"efectivo","clientId":null},{"id":52,"ts":"2026-08-24T18:46:00","items":[{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":1}],"total":1100,"pay":"fiado","clientId":5},{"id":53,"ts":"2026-08-25T08:00:00","items":[{"pid":11,"name":"Pan lactal","price":2100,"cost":1400,"qty":2}],"total":4200,"pay":"fiado","clientId":2},{"id":54,"ts":"2026-08-25T13:58:00","items":[{"pid":8,"name":"Fideos 500g","price":1300,"cost":800,"qty":3}],"total":3900,"pay":"efectivo","clientId":null},{"id":55,"ts":"2026-08-26T12:59:00","items":[{"pid":16,"name":"Mermelada de durazno","price":2000,"cost":1300,"qty":3}],"total":6000,"pay":"tarjeta","clientId":null},{"id":56,"ts":"2026-08-26T10:56:00","items":[{"pid":16,"name":"Mermelada de durazno","price":2000,"cost":1300,"qty":3}],"total":6000,"pay":"transferencia","clientId":null},{"id":57,"ts":"2026-08-26T16:23:00","items":[{"pid":1,"name":"Coca Cola 1.5L","price":2800,"cost":1900,"qty":1},{"pid":24,"name":"Caramelos surtidos","price":1000,"cost":600,"qty":2}],"total":4800,"pay":"fiado","clientId":3},{"id":58,"ts":"2026-08-27T12:27:00","items":[{"pid":12,"name":"Galletitas surtidas","price":1200,"cost":700,"qty":3},{"pid":9,"name":"Aceite girasol 900ml","price":2900,"cost":1900,"qty":1},{"pid":14,"name":"Leche entera 1L","price":1500,"cost":1000,"qty":3}],"total":11000,"pay":"transferencia","clientId":null},{"id":59,"ts":"2026-08-28T13:56:00","items":[{"pid":7,"name":"Arroz 1kg","price":1700,"cost":1100,"qty":3},{"pid":2,"name":"Agua sin gas 2L","price":1100,"cost":700,"qty":2},{"pid":21,"name":"Esponja de cocina","price":600,"cost":300,"qty":1}],"total":7900,"pay":"efectivo","clientId":null},{"id":60,"ts":"2026-08-29T10:48:00","items":[{"pid":4,"name":"Jugo de naranja 1L","price":1400,"cost":900,"qty":2},{"pid":6,"name":"Az\u00facar 1kg","price":1400,"cost":900,"qty":3}],"total":7000,"pay":"fiado","clientId":4}],"abonos":[{"id":1,"ts":"2026-08-27T17:30:00","clientId":3,"amount":18900},{"id":2,"ts":"2026-08-27T17:30:00","clientId":5,"amount":15000},{"id":3,"ts":"2026-08-28T11:00:00","clientId":2,"amount":4200,"saleId":53},{"id":4,"ts":"2026-08-28T18:40:00","clientId":1,"amount":2100}],"closures":[{"id":1,"date":"2026-08-26","ts":"2026-08-26T21:00:00","efectivo":0,"tarjeta":6000,"transferencia":6000,"fiado":4800,"total":16800,"contado":0,"dif":0,"nota":""},{"id":2,"date":"2026-08-27","ts":"2026-08-27T21:00:00","efectivo":0,"tarjeta":0,"transferencia":11000,"fiado":0,"total":11000,"contado":-200,"dif":-200,"nota":"falt\u00f3 cambio"},{"id":3,"date":"2026-08-28","ts":"2026-08-28T21:00:00","efectivo":7900,"tarjeta":0,"transferencia":0,"fiado":0,"total":7900,"contado":8050,"dif":150,"nota":""}],"seq":{"p":25,"c":7,"s":61,"a":5,"z":4},"lastBackup":null};
+$('btn-demo').addEventListener('click', ()=>{
+  const hasData = state.sales.length || state.products.length;
+  if(hasData && !confirm(`Esto REEMPLAZA tus datos actuales (${state.products.length} productos, ${state.sales.length} ventas) por los de demostración.\n\n¿Continuar?`)) return;
+  state = JSON.parse(JSON.stringify(DEMO_DATA));
+  save(); renderAll();
+  toast('Datos de demostración cargados 🎉 Recorré las pestañas para probar todo.');
+});
+$('btn-wipe').addEventListener('click', ()=>{
+  if(!confirm(`Esto borra TODO: ${state.products.length} productos, ${state.sales.length} ventas, ${state.clients.length} clientes, cierres y pagos.\n\n¿Seguro?`)) return;
+  if(!confirm('Última pregunta: ¿ya descargaste una copia de seguridad por si te arrepentís?\n\nAceptar = borrar todo igual.')) return;
+  state = {products:[], clients:[], sales:[], abonos:[], closures:[], seq:{p:1,c:1,s:1,a:1,z:1}, lastBackup:null};
+  save(); renderAll(); toast('Todos los datos fueron borrados. Empezás de cero.');
+});
+/* ===== Guardado automático en archivo (File System Access) ===== */
+const FS_OK = typeof window.showSaveFilePicker === 'function';
+let fileHandle = null, fileSaveTimer = null, lastFileSave = null, fileSaveError = false;
+
+function idbOpen(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('amada_fs', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbSet(k, v){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(v, k);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(k){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const rq = db.transaction('kv').objectStore('kv').get(k);
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+  });
+}
+async function idbDel(k){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').delete(k);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+
+async function writeDataFile(){
+  if(!fileHandle) return;
+  try{
+    const w = await fileHandle.createWritable();
+    await w.write(JSON.stringify(state));
+    await w.close();
+    lastFileSave = new Date(); fileSaveError = false;
+  }catch(e){
+    console.error('No se pudo escribir el archivo de datos', e);
+    fileSaveError = true;
+    if(e && e.name === 'NotAllowedError') $('fs-bar').style.display = 'block';
+  }
+  renderFsStatus();
+}
+function scheduleFileSave(){
+  if(!fileHandle) return;
+  clearTimeout(fileSaveTimer);
+  fileSaveTimer = setTimeout(writeDataFile, 800);
+}
+async function maybeRecoverFromFile(){
+  try{
+    const f = await fileHandle.getFile();
+    const text = await f.text();
+    if(!text.trim()) return;
+    const data = JSON.parse(text);
+    if(data && data.products && data.sales && data.seq){
+      const empty = !state.sales.length && !state.products.length && !state.clients.length;
+      if(empty && (data.sales.length || data.products.length || data.clients.length)){
+        state = data; save(); renderAll();
+        toast('Datos recuperados desde el archivo de datos ✔');
+      }
+    }
+  }catch(e){ console.error('No se pudo leer el archivo de datos', e); }
+}
+async function initFileStore(){
+  renderFsStatus();
+  if(!FS_OK) return;
+  try{
+    const h = await idbGet('handle');
+    if(!h) return;
+    fileHandle = h;
+    const perm = await h.queryPermission({mode:'readwrite'});
+    if(perm === 'granted'){ await maybeRecoverFromFile(); await writeDataFile(); }
+    else { $('fs-bar').style.display = 'block'; }
+  }catch(e){ console.error(e); }
+  renderFsStatus();
+}
+function renderFsStatus(){
+  const el = $('fs-status');
+  if(!FS_OK){
+    el.textContent = 'Tu navegador no soporta esta función (usá Chrome o Edge para activarla). Mientras tanto, los datos se guardan dentro del navegador y podés usar las copias de seguridad de abajo.';
+    $('btn-fs-connect').style.display = 'none';
+    $('btn-fs-disconnect').style.display = 'none';
+    return;
+  }
+  if(!fileHandle){
+    el.textContent = 'Sin archivo conectado: los datos viven solo dentro del navegador. Tocá «Conectar archivo de datos» y guardalo como AMADA-datos.json en tu carpeta.';
+    $('btn-fs-connect').style.display = '';
+    $('btn-fs-disconnect').style.display = 'none';
+  } else {
+    el.innerHTML = (fileSaveError
+      ? '⚠ Conectado a <strong>' + esc(fileHandle.name) + '</strong> pero el último guardado falló. Si aparece la franja amarilla arriba, tocá «Reconectar».'
+      : '✔ Guardando automáticamente en <strong>' + esc(fileHandle.name) + '</strong>'
+        + (lastFileSave ? ' · último guardado ' + lastFileSave.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : ''));
+    $('btn-fs-connect').style.display = 'none';
+    $('btn-fs-disconnect').style.display = '';
+  }
+}
+$('btn-fs-connect').addEventListener('click', async ()=>{
+  try{
+    const h = await window.showSaveFilePicker({
+      suggestedName: 'AMADA-datos.json',
+      types: [{description:'Datos de AMADA', accept:{'application/json':['.json']}}]
+    });
+    fileHandle = h; fileSaveError = false;
+    await idbSet('handle', h);
+    await writeDataFile();
+    toast('Archivo de datos conectado ✔ Ahora todo se guarda solo.');
+  }catch(e){
+    if(e && e.name !== 'AbortError'){ console.error(e); toast('No se pudo conectar el archivo: ' + e.message, true); }
+  }
+  renderFsStatus();
+});
+$('btn-fs-reconnect').addEventListener('click', async ()=>{
+  if(!fileHandle) { $('fs-bar').style.display='none'; return; }
+  try{
+    const perm = await fileHandle.requestPermission({mode:'readwrite'});
+    if(perm === 'granted'){
+      $('fs-bar').style.display = 'none'; fileSaveError = false;
+      await maybeRecoverFromFile();
+      await writeDataFile();
+      toast('Archivo de datos reconectado ✔');
+    }
+  }catch(e){ console.error(e); }
+  renderFsStatus();
+});
+$('btn-fs-disconnect').addEventListener('click', async ()=>{
+  if(!confirm('¿Dejar de guardar en el archivo? Los datos siguen dentro del navegador.')) return;
+  fileHandle = null; lastFileSave = null; fileSaveError = false;
+  try{ await idbDel('handle'); }catch(e){}
+  $('fs-bar').style.display = 'none';
+  renderFsStatus();
+  toast('Archivo de datos desconectado');
+});
+
+function renderRespaldo(){
+  renderFsStatus();
+  $('backup-info').textContent = state.lastBackup
+    ? 'Última copia de seguridad: ' + fmtDateTime(state.lastBackup)
+    : 'Todavía no hiciste ninguna copia de seguridad.';
+  const owed = state.clients.reduce((t,c)=>t+Math.max(0,clientBalance(c.id)),0);
+  const stockValue = state.products.reduce((t,p)=>t+(p.cost||0)*p.stock,0);
+  $('respaldo-kpis').innerHTML = `
+    <div class="kpi"><div class="k-label">Productos</div><div class="k-value">${state.products.length}</div></div>
+    <div class="kpi"><div class="k-label">Ventas registradas</div><div class="k-value">${state.sales.length}</div></div>
+    <div class="kpi"><div class="k-label">Clientes</div><div class="k-value">${state.clients.length}</div></div>
+    <div class="kpi"><div class="k-label">Valor del stock (costo)</div><div class="k-value">${fmt(stockValue)}</div></div>
+    <div class="kpi red"><div class="k-label">Fiado por cobrar</div><div class="k-value">${fmt(owed)}</div></div>`;
+}
+
+/* ================= Render general ================= */
+function renderVenderKpis(){
+  const t = dayTotals(todayKey());
+  const low = lowStockCount();
+  $('vender-kpis').innerHTML = `
+    <div class="kpi green"><div class="k-label">Vendido hoy</div><div class="k-value">${fmt(t.total)}</div></div>
+    <div class="kpi"><div class="k-label">Ventas hoy</div><div class="k-value">${t.count}</div></div>
+    <div class="kpi ${low?'red':''}"><div class="k-label">Stock bajo</div><div class="k-value">${low ? low+' ⚠' : 'OK'}</div></div>`;
+}
+function renderCatSelects(){
+  const cats = categories();
+  const opts = '<option value="">Todas las categorías</option>' + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  const keep1 = $('pos-cat').value, keep2 = $('prod-cat-filter').value;
+  $('pos-cat').innerHTML = opts; $('pos-cat').value = keep1;
+  $('prod-cat-filter').innerHTML = opts; $('prod-cat-filter').value = keep2;
+}
+function renderBadge(){
+  const low = lowStockCount();
+  $('badge-low').style.display = low ? 'inline-block' : 'none';
+  $('badge-low').textContent = low;
+}
+function renderAll(){
+  renderCatSelects(); renderBadge();
+  renderVenderKpis(); renderPosList(); renderCart(); renderFiadoSelect();
+  renderProducts(); renderClientes(); renderFiado(); renderCaja(); renderRespaldo();
+}
+$('rep-date').value = todayKey();
+$('fm-date').value = todayKey();
+$('fm-month').value = todayKey().slice(0,7);
+checkStorage();
+renderAll();
+initFileStore();
+</script>
+</body>
+</html>

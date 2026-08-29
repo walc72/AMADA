@@ -1,0 +1,7 @@
+# Datos reales del negocio — NUNCA subirlos al repositorio
+AMADA-datos.json
+Respaldo_AMADA_*.json
+
+# Archivos temporales
+*.tmp
+Thumbs.db
