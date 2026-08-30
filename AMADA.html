@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AMADA — Control de Tienda</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e7a5f">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root{
     --bg:#f4f6f8; --card:#ffffff; --ink:#1c2733; --muted:#68788a;
@@ -136,6 +140,7 @@
     <button data-tab="reportes">📊 Reportes</button>
     <button data-tab="respaldo">💾 Respaldo</button>
   </nav>
+  <button id="btn-install" class="btn btn-sm" style="display:none; background:var(--accent); color:#3a2b00; margin-left:auto">📲 Instalar app</button>
 </header>
 
 <div id="storage-banner">⚠ <strong>Este navegador no está guardando los datos.</strong> Todo lo que cargues se va a perder al cerrar la página. Abrí <strong>AMADA.html</strong> con doble clic desde tu carpeta en la computadora (no desde OneDrive en internet, ni en ventana de incógnito).</div>
@@ -1990,6 +1995,26 @@ checkStorage();
 renderAll();
 initFileStore();
 cloudInit();
+
+/* ===== PWA: funcionar sin internet e instalarse como app ===== */
+if('serviceWorker' in navigator && location.protocol === 'https:'){
+  navigator.serviceWorker.register('sw.js').catch(e => console.error('Service worker:', e));
+}
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  installPrompt = e;
+  $('btn-install').style.display = '';
+});
+$('btn-install').addEventListener('click', async ()=>{
+  if(!installPrompt) return;
+  installPrompt.prompt();
+  const choice = await installPrompt.userChoice;
+  installPrompt = null;
+  $('btn-install').style.display = 'none';
+  if(choice && choice.outcome === 'accepted') toast('AMADA instalada ✔ Buscala con su ícono verde.');
+});
+window.addEventListener('appinstalled', ()=>{ $('btn-install').style.display = 'none'; });
 </script>
 </body>
 </html>
