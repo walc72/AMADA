@@ -427,6 +427,7 @@
       <div class="row">
         <button class="btn btn-secondary" id="cl-sync">🔄 Sincronizar ahora</button>
         <button class="btn btn-secondary" id="cl-logout">Desconectar</button>
+        <button class="btn btn-danger" id="cl-signout">🚪 Cerrar sesión en este dispositivo</button>
       </div>
     </div>
   </div>
@@ -1816,6 +1817,21 @@ $('login-new').addEventListener('click', async ()=>{
   }
 });
 $('login-skip').addEventListener('click', ()=> $('modal-login').classList.remove('open'));
+$('cl-signout').addEventListener('click', async ()=>{
+  if(!confirm('Cerrar sesión en este dispositivo:\n\n• Tus datos quedan guardados en la NUBE (los recuperás con tu código de tienda).\n• Este dispositivo queda vacío y vuelve a la pantalla de entrada.\n\n¿Ya tenés tu código anotado? ¿Continuar?')) return;
+  toast('Guardando en la nube antes de salir...');
+  await cloudPush();
+  if(cloudError && !confirm('⚠ No se pudo confirmar el último guardado en la nube. ¿Cerrar sesión igual? Podrías perder los últimos cambios.')) return;
+  cloudOn = false; cloudMem = null; lastCloudSave = null; cloudError = false;
+  try{ localStorage.removeItem(CLOUD_CFG_KEY); }catch(e){}
+  try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  state = {products:[], clients:[], sales:[], abonos:[], closures:[], seq:{p:1,c:1,s:1,a:1,z:1}, lastBackup:null};
+  cart = []; renderAll();
+  $('cl-url').value = ''; $('cl-key').value = ''; $('cl-code').value = ''; $('login-code').value = '';
+  renderCloudStatus();
+  $('modal-login').classList.add('open');
+  toast('Sesión cerrada. Tus datos te esperan en la nube.');
+});
 async function cloudPush(){
   if(!cloudOn) return;
   try{
