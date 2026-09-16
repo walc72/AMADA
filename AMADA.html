@@ -350,6 +350,10 @@
         <label class="fld" id="rep-date-label">Día</label>
         <input type="date" id="rep-date">
       </div>
+      <div style="flex:0 0 190px">
+        <label class="fld">Cliente</label>
+        <select id="rep-client"><option value="">Todos</option></select>
+      </div>
       <div class="row" style="gap:6px">
         <button class="btn btn-secondary" id="btn-rep-prev" title="Anterior">‹</button>
         <button class="btn btn-secondary" id="btn-rep-hoy">Hoy</button>
@@ -1283,8 +1287,14 @@ function reportRange(){
   }
   return {start: todayKey(start), end: todayKey(end), label, period};
 }
+function repClientId(){ return Number($('rep-client').value) || null; }
 function salesInRange(r){
-  return state.sales.filter(s => { const k = todayKey(new Date(s.ts)); return k >= r.start && k <= r.end; });
+  const cid = repClientId();
+  return state.sales.filter(s => {
+    if(cid && s.clientId !== cid) return false;
+    const k = todayKey(new Date(s.ts));
+    return k >= r.start && k <= r.end;
+  });
 }
 let lastReport = null;
 function buildReport(){
@@ -1311,7 +1321,13 @@ function buildReport(){
 function renderReport(){
   const {r, sales, tot, top, byDay} = buildReport();
   $('rep-date-label').textContent = r.period==='dia' ? 'Día' : r.period==='semana' ? 'Un día de esa semana' : 'Un día de ese mes';
-  $('rep-range-label').textContent = r.label + ' — ' + sales.length + ' venta(s)';
+  const keepClient = $('rep-client').value;
+  $('rep-client').innerHTML = '<option value="">Todos</option>' +
+    state.clients.slice().sort((a,b)=>a.name.localeCompare(b.name,'es'))
+      .map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('rep-client').value = keepClient;
+  const repClient = repClientId() ? state.clients.find(c=>c.id===repClientId()) : null;
+  $('rep-range-label').textContent = r.label + (repClient ? ' · Cliente: ' + repClient.name : '') + ' — ' + sales.length + ' venta(s)';
   $('rep-content').style.display = 'block';
   $('rep-kpis').innerHTML = `
     <div class="kpi green"><div class="k-label">Total vendido</div><div class="k-value">${fmt(tot.total)}</div></div>
@@ -1387,6 +1403,7 @@ function svgBars(labels, values){
 }
 $('rep-period').addEventListener('change', renderReport);
 $('rep-date').addEventListener('change', renderReport);
+$('rep-client').addEventListener('change', renderReport);
 function shiftReport(dir){
   const period = $('rep-period').value;
   const base = $('rep-date').value ? dateFromKey($('rep-date').value) : new Date();
@@ -1407,7 +1424,8 @@ $('btn-rep-excel').addEventListener('click', ()=>{
   const tr = cells => '<tr>' + cells.map(c => typeof c === 'number'
     ? `<td style="mso-number-format:'0.00'">${c.toFixed(2)}</td>` : `<td>${esc(c)}</td>`).join('') + '</tr>';
   rows.push(`<tr><td colspan="5" style="font-weight:bold; font-size:14pt">AMADA — Reporte de ventas</td></tr>`);
-  rows.push(tr([r.label,'','','','']));
+  const repCli = repClientId() ? state.clients.find(c=>c.id===repClientId()) : null;
+  rows.push(tr([r.label, repCli ? 'Cliente: ' + repCli.name : 'Todos los clientes','','','']));
   rows.push(tr(['','','','','']));
   rows.push(tr(['RESUMEN','','','','']));
   rows.push(tr(['Total vendido', tot.total])); rows.push(tr(['Ganancia estimada', tot.profit]));
