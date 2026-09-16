@@ -182,6 +182,9 @@
         <label class="fld" id="sale-client-label">Cliente (opcional)</label>
         <select id="fiado-client"></select>
       </div>
+      <label style="display:flex; align-items:center; gap:7px; font-size:14px; margin-bottom:10px; cursor:pointer">
+        <input type="checkbox" id="auto-wa"> 📱 Mandar el ticket por WhatsApp al cobrar (si la venta tiene cliente con teléfono)
+      </label>
       <div class="row">
         <button class="btn btn-primary grow" id="btn-cobrar" style="font-size:17px; padding:13px">✔ Cobrar</button>
         <button class="btn btn-secondary" id="btn-cancelar-venta">Cancelar</button>
@@ -462,6 +465,9 @@
       </div>
     </div>
     <p class="muted" style="margin-top:8px">Al enviar un ticket por WhatsApp, este código se antepone al teléfono del cliente (si el teléfono ya lo incluye, no se duplica).</p>
+    <label style="display:flex; align-items:center; gap:7px; font-size:14px; margin-top:10px; cursor:pointer">
+      <input type="checkbox" id="st-waapp"> Abrir con la aplicación de WhatsApp instalada (recomendado si tenés WhatsApp en esta computadora — se salta la página intermedia)
+    </label>
   </div>
   <div class="card">
     <h3>Datos actuales</h3>
@@ -775,6 +781,10 @@ $('btn-cobrar').addEventListener('click', ()=>{
   save();
   cart = []; $('fiado-client').value = ''; renderCart(); renderAll();
   showTicket(sale);
+  if(state.settings && state.settings.autoWa && clientId){
+    const c = state.clients.find(x=>x.id===clientId);
+    if(c && waPhone(c.phone)) waOpen(sale);
+  }
   toast('Venta registrada: ' + fmt(sale.total));
 });
 
@@ -816,12 +826,31 @@ function waPhone(raw){
   if(pre && d.indexOf(pre) !== 0) d = pre + d;
   return d;
 }
+function waOpen(sale){
+  const client = sale.clientId ? state.clients.find(c=>c.id===sale.clientId) : null;
+  const phone = client ? waPhone(client.phone) : '';
+  const text = encodeURIComponent(ticketText(sale));
+  const url = (state.settings && state.settings.waApp)
+    ? 'whatsapp://send?' + (phone ? 'phone=' + phone + '&' : '') + 'text=' + text
+    : 'https://wa.me/' + phone + '?text=' + text;
+  window.open(url, '_blank');
+}
 $('btn-wa-ticket').addEventListener('click', ()=>{
   if(!lastTicketSale) return;
   const client = lastTicketSale.clientId ? state.clients.find(c=>c.id===lastTicketSale.clientId) : null;
-  const phone = client ? waPhone(client.phone) : '';
-  if(client && !phone) toast('Este cliente no tiene teléfono cargado: elegí el contacto en WhatsApp');
-  window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(ticketText(lastTicketSale)), '_blank');
+  if(client && !waPhone(client.phone)) toast('Este cliente no tiene teléfono cargado: elegí el contacto en WhatsApp');
+  waOpen(lastTicketSale);
+});
+$('auto-wa').addEventListener('change', ()=>{
+  if(!state.settings) state.settings = {};
+  state.settings.autoWa = $('auto-wa').checked;
+  save();
+  if(state.settings.autoWa) toast('Al cobrar, WhatsApp se abre solo con el ticket listo 📱');
+});
+$('st-waapp').addEventListener('change', ()=>{
+  if(!state.settings) state.settings = {};
+  state.settings.waApp = $('st-waapp').checked;
+  save();
 });
 $('btn-share-ticket').addEventListener('click', async ()=>{
   if(!lastTicketSale) return;
@@ -1721,7 +1750,10 @@ $('restore-file').addEventListener('change', e => {
       const data = JSON.parse(reader.result);
       if(!data.products || !data.sales || !data.seq) throw new Error('El archivo se pudo leer pero no tiene el formato de una copia de AMADA');
       if(!confirm(`El archivo tiene ${data.products.length} productos y ${data.sales.length} ventas.\n\n⚠ Esto REEMPLAZA todos los datos actuales. ¿Continuar?`)) return;
-      state = data; save(); renderAll();
+      const keepSettings = state.settings;
+      state = data;
+      if(!state.settings && keepSettings) state.settings = keepSettings;
+      save(); renderAll();
       toast('Datos restaurados correctamente');
     }catch(err){
       console.error('Error al restaurar:', err);
@@ -1735,7 +1767,9 @@ const DEMO_DATA = {"products":[{"id":1,"name":"Coca Cola 1.5L","cat":"Bebidas","
 $('btn-demo').addEventListener('click', ()=>{
   const hasData = state.sales.length || state.products.length;
   if(hasData && !confirm(`Esto REEMPLAZA tus datos actuales (${state.products.length} productos, ${state.sales.length} ventas) por los de demostración.\n\n¿Continuar?`)) return;
+  const keepSettings = state.settings;
   state = JSON.parse(JSON.stringify(DEMO_DATA));
+  if(keepSettings) state.settings = keepSettings;
   save(); renderAll();
   toast('Datos de demostración cargados 🎉 Recorré las pestañas para probar todo.');
 });
@@ -2109,6 +2143,7 @@ function renderRespaldo(){
   renderCloudStatus();
   if(document.activeElement !== $('st-waprefix'))
     $('st-waprefix').value = (state.settings && state.settings.waPrefix) || '';
+  $('st-waapp').checked = !!(state.settings && state.settings.waApp);
   $('backup-info').textContent = state.lastBackup
     ? 'Última copia de seguridad: ' + fmtDateTime(state.lastBackup)
     : 'Todavía no hiciste ninguna copia de seguridad.';
@@ -2124,6 +2159,7 @@ function renderRespaldo(){
 
 /* ================= Render general ================= */
 function renderVenderKpis(){
+  $('auto-wa').checked = !!(state.settings && state.settings.autoWa);
   const t = dayTotals(todayKey());
   const low = lowStockCount();
   $('vender-kpis').innerHTML = `
