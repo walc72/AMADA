@@ -454,6 +454,16 @@
     <p class="muted" id="backup-info" style="margin-top:12px"></p>
   </div>
   <div class="card">
+    <h3>⚙ Ajustes</h3>
+    <div class="row">
+      <div style="flex:0 0 280px">
+        <label class="fld">Código de país para WhatsApp</label>
+        <input type="text" id="st-waprefix" placeholder="Ej: 549 Argentina, 51 Perú, 52 México">
+      </div>
+    </div>
+    <p class="muted" style="margin-top:8px">Al enviar un ticket por WhatsApp, este código se antepone al teléfono del cliente (si el teléfono ya lo incluye, no se duplica).</p>
+  </div>
+  <div class="card">
     <h3>Datos actuales</h3>
     <div class="kpis" id="respaldo-kpis"></div>
   </div>
@@ -568,9 +578,11 @@
   <div class="modal" style="max-width:340px">
     <h3>Venta registrada ✔</h3>
     <div id="ticket-preview" style="font-family:'Courier New',monospace; font-size:13px; border:1px dashed var(--line); border-radius:8px; padding:12px; margin-bottom:8px"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-wrap:wrap">
       <button class="btn btn-secondary" data-close="modal-ticket">Cerrar</button>
-      <button class="btn btn-primary" id="btn-print-ticket">🖨 Imprimir ticket</button>
+      <button class="btn btn-secondary" id="btn-share-ticket">📤 Compartir</button>
+      <button class="btn" id="btn-wa-ticket" style="background:#25D366; color:#fff">📱 WhatsApp</button>
+      <button class="btn btn-primary" id="btn-print-ticket">🖨 Imprimir</button>
     </div>
   </div>
 </div>
@@ -779,12 +791,51 @@ function ticketHtml(sale){
     <div style="margin-top:4px">Pago: ${PAY_LABEL[sale.pay]}${client ? ' — ' + esc(client.name) : ''}</div>
     <div class="t-foot" style="text-align:center; margin-top:10px">¡Gracias por su compra!</div>`;
 }
+let lastTicketSale = null;
 function showTicket(sale){
+  lastTicketSale = sale;
   $('ticket-preview').innerHTML = ticketHtml(sale);
   $('ticket-print').innerHTML = ticketHtml(sale);
   $('modal-ticket').classList.add('open');
 }
 $('btn-print-ticket').addEventListener('click', ()=> window.print());
+function ticketText(sale){
+  const client = sale.clientId ? state.clients.find(c=>c.id===sale.clientId) : null;
+  const lines = ['🏪 *AMADA*', fmtDateTime(sale.ts) + ' · Venta #' + sale.id, '─────────────'];
+  sale.items.forEach(it => lines.push(it.qty + '× ' + it.name + '  ' + fmt(it.price*it.qty)));
+  lines.push('─────────────');
+  lines.push('*TOTAL: ' + fmt(sale.total) + '*');
+  lines.push('Pago: ' + PAY_LABEL[sale.pay] + (client ? ' — ' + client.name : ''));
+  lines.push('¡Gracias por su compra!');
+  return lines.join('\n');
+}
+function waPhone(raw){
+  let d = String(raw||'').replace(/\D/g,'').replace(/^0+/,'');
+  if(!d) return '';
+  const pre = String((state.settings && state.settings.waPrefix) || '').replace(/\D/g,'');
+  if(pre && d.indexOf(pre) !== 0) d = pre + d;
+  return d;
+}
+$('btn-wa-ticket').addEventListener('click', ()=>{
+  if(!lastTicketSale) return;
+  const client = lastTicketSale.clientId ? state.clients.find(c=>c.id===lastTicketSale.clientId) : null;
+  const phone = client ? waPhone(client.phone) : '';
+  if(client && !phone) toast('Este cliente no tiene teléfono cargado: elegí el contacto en WhatsApp');
+  window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(ticketText(lastTicketSale)), '_blank');
+});
+$('btn-share-ticket').addEventListener('click', async ()=>{
+  if(!lastTicketSale) return;
+  try{ await navigator.share({text: ticketText(lastTicketSale)}); }
+  catch(e){ /* cancelado por el usuario */ }
+});
+if(!navigator.share) $('btn-share-ticket').style.display = 'none';
+$('st-waprefix').addEventListener('change', ()=>{
+  if(!state.settings) state.settings = {};
+  state.settings.waPrefix = $('st-waprefix').value.replace(/\D/g,'');
+  $('st-waprefix').value = state.settings.waPrefix;
+  save();
+  toast('Código de país guardado');
+});
 
 /* ================= PRODUCTOS ================= */
 let editingProdId = null;
@@ -2056,6 +2107,8 @@ $('cl-logout').addEventListener('click', ()=>{
 function renderRespaldo(){
   renderFsStatus();
   renderCloudStatus();
+  if(document.activeElement !== $('st-waprefix'))
+    $('st-waprefix').value = (state.settings && state.settings.waPrefix) || '';
   $('backup-info').textContent = state.lastBackup
     ? 'Última copia de seguridad: ' + fmtDateTime(state.lastBackup)
     : 'Todavía no hiciste ninguna copia de seguridad.';
