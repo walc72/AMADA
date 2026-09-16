@@ -227,6 +227,7 @@
     <div class="row" style="justify-content:space-between; margin-bottom:12px">
       <h2 style="margin:0">Clientes</h2>
       <div class="row" style="gap:8px">
+        <button class="btn btn-secondary" id="btn-cli-excel">⬇ Exportar historiales</button>
         <button class="btn btn-secondary" id="btn-imp-cli">⬆ Importar CSV</button>
         <button class="btn btn-primary" id="btn-new-client2">＋ Nuevo cliente</button>
       </div>
@@ -1010,6 +1011,48 @@ $('mh-excel').addEventListener('click', ()=>{
   const safeName = d.c.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'cliente';
   download('Historial_' + safeName + '_' + todayKey() + '.xls', '﻿' + html, 'application/vnd.ms-excel');
   toast('Historial exportado ✔');
+});
+$('btn-cli-excel').addEventListener('click', ()=>{
+  const q = $('cli-search').value.trim().toLowerCase();
+  const clients = state.clients
+    .filter(c => !q || c.name.toLowerCase().includes(q) || (c.phone||'').includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  if(!clients.length){ toast('No hay clientes para exportar', true); return; }
+  const tr = cells => '<tr>' + cells.map(c => typeof c === 'number'
+    ? `<td style="mso-number-format:'0.00'">${c.toFixed(2)}</td>` : `<td>${esc(c)}</td>`).join('') + '</tr>';
+  const clientMovs = cid => [
+    ...state.sales.filter(s=>s.clientId===cid)
+      .map(s=>({ts:s.ts, det:s.items.map(it=>it.qty+'× '+it.name).join(', '), pay:PAY_LABEL[s.pay], amount:s.total, neg:false})),
+    ...state.abonos.filter(a=>a.clientId===cid)
+      .map(a=>({ts:a.ts, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago de fiado', pay:'Pago', amount:a.amount, neg:true}))
+  ].sort((a,b)=>b.ts.localeCompare(a.ts));
+  const rows = [];
+  rows.push('<tr><td colspan="6" style="font-weight:bold; font-size:14pt">AMADA — Historial de clientes</td></tr>');
+  rows.push(tr(['Generado', fmtDateTime(new Date().toISOString()), q ? 'Filtrado por: «' + q + '»' : clients.length + ' cliente(s)','','','']));
+  rows.push(tr(['','','','','','']));
+  rows.push(tr(['RESUMEN POR CLIENTE','','','','','']));
+  rows.push(tr(['Cliente','Teléfono','Compras','Total comprado','Pagos de fiado','Debe']));
+  let tCount = 0, tTotal = 0, tPagos = 0, tDebe = 0;
+  clients.forEach(c => {
+    const st = clientStats(c.id);
+    const pagos = state.abonos.filter(a=>a.clientId===c.id).reduce((t,a)=>t+a.amount,0);
+    const debe = Math.max(0, clientBalance(c.id));
+    tCount += st.count; tTotal += st.total; tPagos += pagos; tDebe += debe;
+    rows.push(tr([c.name, c.phone||'', st.count, st.total, pagos, debe]));
+  });
+  rows.push(tr(['TOTAL','', tCount, tTotal, tPagos, tDebe]));
+  clients.forEach(c => {
+    rows.push(tr(['','','','','','']));
+    rows.push('<tr><td colspan="6" style="font-weight:bold; background:#e3f2ed">CLIENTE: ' + esc(c.name)
+      + (c.phone ? ' — Tel: ' + esc(c.phone) : '') + (c.notes ? ' — ' + esc(c.notes) : '') + '</td></tr>');
+    const movs = clientMovs(c.id);
+    if(!movs.length){ rows.push(tr(['Sin movimientos','','','','',''])); return; }
+    rows.push(tr(['Fecha','Detalle','Pago','Monto','','']));
+    movs.forEach(m => rows.push(tr([fmtDateTime(m.ts), m.det, m.pay, m.neg ? -m.amount : m.amount,'','' ])));
+  });
+  const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1">${rows.join('')}</table></body></html>`;
+  download('Historiales_AMADA_' + todayKey() + '.xls', '﻿' + html, 'application/vnd.ms-excel');
+  toast('Historial de ' + clients.length + ' cliente(s) exportado ✔');
 });
 $('ma-save').addEventListener('click', ()=>{
   const amount = Number($('ma-amount').value);
