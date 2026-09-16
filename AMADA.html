@@ -540,7 +540,10 @@
       <tbody id="mh-body"></tbody>
     </table></div>
     <div class="empty" id="mh-empty" style="display:none">Sin movimientos todavía.</div>
-    <div class="modal-actions"><button class="btn btn-secondary" data-close="modal-hist">Cerrar</button></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="mh-excel">⬇ Exportar a Excel</button>
+      <button class="btn btn-secondary" data-close="modal-hist">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -931,11 +934,9 @@ function openHistorial(cid){
   renderHistorial();
   $('modal-hist').classList.add('open');
 }
-function renderHistorial(){
-  const c = state.clients.find(x=>x.id===histClientId); if(!c) return;
+function histData(){
+  const c = state.clients.find(x=>x.id===histClientId); if(!c) return null;
   const period = $('mh-period').value;
-  $('mh-date-wrap').style.display = period==='dia' ? '' : 'none';
-  $('mh-month-wrap').style.display = period==='mes' ? '' : 'none';
   const dayKey = $('mh-date').value || todayKey();
   const monthKey = $('mh-month').value || todayKey().slice(0,7);
   const inRange = ts => {
@@ -946,25 +947,70 @@ function renderHistorial(){
   };
   const sales = state.sales.filter(s => s.clientId===histClientId && inRange(s.ts));
   const abonos = state.abonos.filter(a => a.clientId===histClientId && inRange(a.ts));
-  const total = sales.reduce((t,s)=>t+s.total,0);
-  const bal = clientBalance(histClientId);
-  const suf = period==='todo' ? '' : ' (período)';
-  $('mh-title').textContent = 'Historial de ' + c.name;
-  $('mh-kpis').innerHTML = `
-    <div class="kpi"><div class="k-label">Compras${suf}</div><div class="k-value">${sales.length}</div></div>
-    <div class="kpi"><div class="k-label">Comprado${suf}</div><div class="k-value" style="font-size:17px">${fmt(total)}</div></div>
-    <div class="kpi ${bal>0.009?'red':''}"><div class="k-label">Debe (actual)</div><div class="k-value" style="font-size:17px">${fmt(Math.max(0,bal))}</div></div>`;
+  let label = 'Todo el historial';
+  if(period === 'dia') label = 'Día ' + fmtDate(dayKey);
+  if(period === 'mes'){
+    const [y, m] = monthKey.split('-').map(Number);
+    const mesTxt = new Date(y, m-1, 1).toLocaleDateString('es-AR',{month:'long', year:'numeric'});
+    label = 'Mes de ' + mesTxt.charAt(0).toUpperCase() + mesTxt.slice(1);
+  }
   const movs = [
     ...sales.map(s=>({ts:s.ts, det:s.items.map(it=>it.qty+'× '+it.name).join(', '), pay:PAY_LABEL[s.pay], amount:s.total, neg:false})),
     ...abonos.map(a=>({ts:a.ts, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago de fiado', pay:'', amount:a.amount, neg:true}))
   ].sort((a,b)=>b.ts.localeCompare(a.ts));
-  $('mh-body').innerHTML = movs.map(m=>`
+  return {c, period, label, sales, abonos, movs,
+    total: sales.reduce((t,s)=>t+s.total,0), bal: clientBalance(histClientId)};
+}
+function renderHistorial(){
+  const d = histData(); if(!d) return;
+  $('mh-date-wrap').style.display = d.period==='dia' ? '' : 'none';
+  $('mh-month-wrap').style.display = d.period==='mes' ? '' : 'none';
+  const suf = d.period==='todo' ? '' : ' (período)';
+  $('mh-title').textContent = 'Historial de ' + d.c.name;
+  $('mh-kpis').innerHTML = `
+    <div class="kpi"><div class="k-label">Compras${suf}</div><div class="k-value">${d.sales.length}</div></div>
+    <div class="kpi"><div class="k-label">Comprado${suf}</div><div class="k-value" style="font-size:17px">${fmt(d.total)}</div></div>
+    <div class="kpi ${d.bal>0.009?'red':''}"><div class="k-label">Debe (actual)</div><div class="k-value" style="font-size:17px">${fmt(Math.max(0,d.bal))}</div></div>`;
+  $('mh-body').innerHTML = d.movs.map(m=>`
     <tr><td style="white-space:nowrap">${fmtDateTime(m.ts)}</td><td>${esc(m.det)}</td><td>${m.pay}</td>
       <td class="num" style="color:${m.neg?'var(--ok)':'inherit'}">${m.neg?'−':''}${fmt(m.amount)}</td></tr>`).join('');
-  $('mh-empty').textContent = period==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
-  $('mh-empty').style.display = movs.length ? 'none' : 'block';
+  $('mh-empty').textContent = d.period==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
+  $('mh-empty').style.display = d.movs.length ? 'none' : 'block';
 }
 ['mh-period','mh-date','mh-month'].forEach(id => $(id).addEventListener('change', renderHistorial));
+$('mh-excel').addEventListener('click', ()=>{
+  const d = histData(); if(!d) return;
+  const tr = cells => '<tr>' + cells.map(c => typeof c === 'number'
+    ? `<td style="mso-number-format:'0.00'">${c.toFixed(2)}</td>` : `<td>${esc(c)}</td>`).join('') + '</tr>';
+  const rows = [];
+  rows.push('<tr><td colspan="4" style="font-weight:bold; font-size:14pt">AMADA — Historial de ' + esc(d.c.name) + '</td></tr>');
+  rows.push(tr([d.label, d.c.phone ? 'Tel: ' + d.c.phone : '', d.c.notes || '', '']));
+  rows.push(tr(['','','','']));
+  rows.push(tr(['RESUMEN','','','']));
+  rows.push(tr(['Compras', d.sales.length]));
+  rows.push(tr(['Total comprado', d.total]));
+  rows.push(tr(['Pagos de fiado', d.abonos.reduce((t,a)=>t+a.amount,0)]));
+  rows.push(tr(['Debe (al día de hoy)', Math.max(0, d.bal)]));
+  rows.push(tr(['','','','']));
+  rows.push(tr(['PRODUCTOS COMPRADOS','','','']));
+  rows.push(tr(['Producto','Unidades','Total']));
+  const byProd = {};
+  d.sales.forEach(s => s.items.forEach(it => {
+    if(!byProd[it.name]) byProd[it.name] = {qty:0, rev:0};
+    byProd[it.name].qty += it.qty; byProd[it.name].rev += it.price*it.qty;
+  }));
+  Object.entries(byProd).map(([name,v])=>({name, qty:v.qty, rev:v.rev}))
+    .sort((a,b)=>b.rev-a.rev)
+    .forEach(p => rows.push(tr([p.name, p.qty, p.rev])));
+  rows.push(tr(['','','','']));
+  rows.push(tr(['MOVIMIENTOS','','','']));
+  rows.push(tr(['Fecha','Detalle','Pago','Monto']));
+  d.movs.forEach(m => rows.push(tr([fmtDateTime(m.ts), m.det, m.neg ? 'Pago' : m.pay, m.neg ? -m.amount : m.amount])));
+  const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1">${rows.join('')}</table></body></html>`;
+  const safeName = d.c.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'cliente';
+  download('Historial_' + safeName + '_' + todayKey() + '.xls', '﻿' + html, 'application/vnd.ms-excel');
+  toast('Historial exportado ✔');
+});
 $('ma-save').addEventListener('click', ()=>{
   const amount = Number($('ma-amount').value);
   if(!(amount>0)){ toast('Poné un monto válido', true); return; }
