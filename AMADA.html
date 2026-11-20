@@ -511,7 +511,7 @@
   </div>
 </div>
 
-<div class="modal-back" id="modal-abono">
+<div class="modal-back" id="modal-abono" style="z-index:110">
   <div class="modal">
     <h3 id="ma-title">Registrar pago de fiado</h3>
     <p style="margin-bottom:12px" id="ma-info"></p>
@@ -557,7 +557,7 @@
     </div>
     <div class="kpis" id="mh-kpis" style="grid-template-columns:repeat(3,1fr)"></div>
     <div class="table-wrap" style="max-height:320px; overflow-y:auto"><table>
-      <thead><tr><th>Fecha</th><th>Detalle</th><th>Pago</th><th class="num">Monto</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Detalle</th><th>Pago</th><th class="num">Monto</th><th></th></tr></thead>
       <tbody id="mh-body"></tbody>
     </table></div>
     <div class="empty" id="mh-empty" style="display:none">Sin movimientos todavía.</div>
@@ -1068,7 +1068,9 @@ function renderHistorial(){
     <div class="kpi ${d.bal>0.009?'red':''}"><div class="k-label">Debe (actual)</div><div class="k-value" style="font-size:17px">${fmt(Math.max(0,d.bal))}</div></div>`;
   $('mh-body').innerHTML = d.movs.map(m=>`
     <tr><td style="white-space:nowrap">${fmtDateTime(m.ts)}</td><td>${esc(m.det)}</td><td>${m.pay}</td>
-      <td class="num" style="color:${m.neg?'var(--ok)':'inherit'}">${m.neg?'−':''}${fmt(m.amount)}</td></tr>`).join('');
+      <td class="num" style="color:${m.neg?'var(--ok)':'inherit'}">${m.neg?'−':''}${fmt(m.amount)}</td>
+      <td>${m.rest > 0.009 ? `<button class="btn btn-secondary btn-sm" data-revpago="${m.abonoId}">↩ Revertir</button>` : ''}</td></tr>`).join('');
+  $('mh-body').querySelectorAll('[data-revpago]').forEach(b => b.addEventListener('click', ()=> startRevert(Number(b.dataset.revpago))));
   $('mh-empty').textContent = d.period==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
   $('mh-empty').style.display = d.movs.length ? 'none' : 'block';
 }
@@ -1148,6 +1150,15 @@ $('btn-cli-excel').addEventListener('click', ()=>{
   toast('Historial de ' + clients.length + ' cliente(s) exportado ✔');
 });
 let revTarget = null; // id del pago que se está revirtiendo (null = pago nuevo)
+function startRevert(abonoId){
+  const a = state.abonos.find(x=>x.id===abonoId); if(!a) return;
+  const c = state.clients.find(x=>x.id===a.clientId);
+  revTarget = a.id; abonoClientId = a.clientId;
+  $('ma-info').innerHTML = `Pago de <strong>${fmt(a.amount)}</strong> de <strong>${esc(c?c.name:'(eliminado)')}</strong>. `
+    + `Se puede revertir hasta <strong>${fmt(abonoRestante(a))}</strong>; la deuda vuelve a subir ese monto.`;
+  $('ma-amount').value = Math.round(abonoRestante(a)*100)/100;
+  openAbonoModal('rev');
+}
 function openAbonoModal(mode){
   $('ma-title').textContent = mode === 'rev' ? 'Revertir pago' : 'Registrar pago de fiado';
   $('ma-label').textContent = mode === 'rev' ? 'Monto a revertir *' : 'Monto que paga *';
@@ -1166,6 +1177,7 @@ $('ma-save').addEventListener('click', ()=>{
     state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: abonoClientId, amount});
   }
   save(); $('modal-abono').classList.remove('open'); renderAll();
+  if($('modal-hist').classList.contains('open')) renderHistorial();
   toast(orig ? 'Pago revertido: ' + fmt(amount) + ' — la deuda volvió a subir' : 'Pago registrado: ' + fmt(amount));
 });
 function renderFiado(){
@@ -1254,15 +1266,7 @@ function renderFiado(){
       <td class="num" style="color:${m.neg?'var(--ok)':'var(--danger)'}">${m.neg?'−':'+'}${fmt(m.amount)}</td>
       <td>${m.rest > 0.009 ? `<button class="btn btn-secondary btn-sm" data-revpago="${m.abonoId}">↩ Revertir</button>` : ''}</td></tr>`;
   }).join('');
-  $('fiado-mov-body').querySelectorAll('[data-revpago]').forEach(b => b.addEventListener('click', ()=>{
-    const a = state.abonos.find(x=>x.id===Number(b.dataset.revpago)); if(!a) return;
-    const c = state.clients.find(x=>x.id===a.clientId);
-    revTarget = a.id; abonoClientId = a.clientId;
-    $('ma-info').innerHTML = `Pago de <strong>${fmt(a.amount)}</strong> de <strong>${esc(c?c.name:'(eliminado)')}</strong>. `
-      + `Se puede revertir hasta <strong>${fmt(abonoRestante(a))}</strong>; la deuda vuelve a subir ese monto.`;
-    $('ma-amount').value = Math.round(abonoRestante(a)*100)/100;
-    openAbonoModal('rev');
-  }));
+  $('fiado-mov-body').querySelectorAll('[data-revpago]').forEach(b => b.addEventListener('click', ()=> startRevert(Number(b.dataset.revpago))));
   $('fiado-mov-empty').textContent = fmPeriod==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
   $('fiado-mov-empty').style.display = movs.length ? 'none' : 'block';
 }
