@@ -302,7 +302,7 @@
       </div>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Detalle</th><th class="num">Monto</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Detalle</th><th class="num">Monto</th><th></th></tr></thead>
       <tbody id="fiado-mov-body"></tbody>
     </table></div>
     <div class="empty" id="fiado-mov-empty" style="display:none">Sin movimientos todavía.</div>
@@ -513,9 +513,9 @@
 
 <div class="modal-back" id="modal-abono">
   <div class="modal">
-    <h3>Registrar pago de fiado</h3>
+    <h3 id="ma-title">Registrar pago de fiado</h3>
     <p style="margin-bottom:12px" id="ma-info"></p>
-    <div class="fld-group"><label class="fld">Monto que paga *</label><input type="number" id="ma-amount" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="fld-group"><label class="fld" id="ma-label">Monto que paga *</label><input type="number" id="ma-amount" min="0" step="0.01" placeholder="0.00"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" data-close="modal-abono">Cancelar</button>
       <button class="btn btn-primary" id="ma-save">Registrar pago</button>
@@ -657,6 +657,16 @@ function clientBalance(cid){
   return owed - paid;
 }
 function lowStockCount(){ return state.products.filter(p => p.stock <= p.min).length; }
+// Un pago revertido no se borra: se agrega un abono negativo (revertOf) y el saldo se recalcula solo.
+function abonoRestante(a){
+  return a.amount + state.abonos.filter(r => r.revertOf === a.id).reduce((t,r)=>t+r.amount,0);
+}
+function abonoMov(a){
+  const rev = a.amount < 0;
+  return {ts:a.ts, clientId:a.clientId, amount:Math.abs(a.amount), neg:!rev, rev,
+    det:(rev ? 'Reversión de pago' : 'Pago') + (a.saleId ? ' de ticket #'+a.saleId : ''),
+    pay: rev ? 'Reversión' : '', abonoId: a.id, rest: rev ? 0 : abonoRestante(a)};
+}
 function fiadoPendingTickets(cid){
   // Pendiente por ticket: los pagos de un ticket puntual se descuentan de ese ticket;
   // los pagos libres (parciales / cobrar todo) se descuentan del ticket más viejo al más nuevo.
@@ -1041,7 +1051,7 @@ function histData(){
   }
   const movs = [
     ...sales.map(s=>({ts:s.ts, det:s.items.map(it=>it.qty+'× '+it.name).join(', '), pay:PAY_LABEL[s.pay], amount:s.total, neg:false})),
-    ...abonos.map(a=>({ts:a.ts, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago de fiado', pay:'', amount:a.amount, neg:true}))
+    ...abonos.map(abonoMov)
   ].sort((a,b)=>b.ts.localeCompare(a.ts));
   return {c, period, label, sales, abonos, movs,
     total: sales.reduce((t,s)=>t+s.total,0), bal: clientBalance(histClientId)};
@@ -1107,8 +1117,7 @@ $('btn-cli-excel').addEventListener('click', ()=>{
   const clientMovs = cid => [
     ...state.sales.filter(s=>s.clientId===cid)
       .map(s=>({ts:s.ts, det:s.items.map(it=>it.qty+'× '+it.name).join(', '), pay:PAY_LABEL[s.pay], amount:s.total, neg:false})),
-    ...state.abonos.filter(a=>a.clientId===cid)
-      .map(a=>({ts:a.ts, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago de fiado', pay:'Pago', amount:a.amount, neg:true}))
+    ...state.abonos.filter(a=>a.clientId===cid).map(abonoMov)
   ].sort((a,b)=>b.ts.localeCompare(a.ts));
   const rows = [];
   rows.push('<tr><td colspan="6" style="font-weight:bold; font-size:14pt">AMADA — Historial de clientes</td></tr>');
@@ -1132,17 +1141,32 @@ $('btn-cli-excel').addEventListener('click', ()=>{
     const movs = clientMovs(c.id);
     if(!movs.length){ rows.push(tr(['Sin movimientos','','','','',''])); return; }
     rows.push(tr(['Fecha','Detalle','Pago','Monto','','']));
-    movs.forEach(m => rows.push(tr([fmtDateTime(m.ts), m.det, m.pay, m.neg ? -m.amount : m.amount,'','' ])));
+    movs.forEach(m => rows.push(tr([fmtDateTime(m.ts), m.det, m.neg ? 'Pago' : m.pay, m.neg ? -m.amount : m.amount,'','' ])));
   });
   const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1">${rows.join('')}</table></body></html>`;
   download('Historiales_AMADA_' + todayKey() + '.xls', '﻿' + html, 'application/vnd.ms-excel');
   toast('Historial de ' + clients.length + ' cliente(s) exportado ✔');
 });
+let revTarget = null; // id del pago que se está revirtiendo (null = pago nuevo)
+function openAbonoModal(mode){
+  $('ma-title').textContent = mode === 'rev' ? 'Revertir pago' : 'Registrar pago de fiado';
+  $('ma-label').textContent = mode === 'rev' ? 'Monto a revertir *' : 'Monto que paga *';
+  $('ma-save').textContent = mode === 'rev' ? 'Revertir pago' : 'Registrar pago';
+  $('modal-abono').classList.add('open'); $('ma-amount').focus();
+}
 $('ma-save').addEventListener('click', ()=>{
   const amount = Number($('ma-amount').value);
   if(!(amount>0)){ toast('Poné un monto válido', true); return; }
-  state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: abonoClientId, amount});
-  save(); $('modal-abono').classList.remove('open'); renderAll(); toast('Pago registrado: ' + fmt(amount));
+  const orig = revTarget && state.abonos.find(a=>a.id===revTarget);
+  if(orig){
+    const rest = abonoRestante(orig);
+    if(amount > rest + 0.005){ toast('No podés revertir más de ' + fmt(rest) + ' de este pago', true); return; }
+    state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: orig.clientId, amount: -amount, saleId: orig.saleId, revertOf: orig.id});
+  } else {
+    state.abonos.push({id: state.seq.a++, ts: new Date().toISOString(), clientId: abonoClientId, amount});
+  }
+  save(); $('modal-abono').classList.remove('open'); renderAll();
+  toast(orig ? 'Pago revertido: ' + fmt(amount) + ' — la deuda volvió a subir' : 'Pago registrado: ' + fmt(amount));
 });
 function renderFiado(){
   // filtro por cliente (mantiene la selección al re-renderizar)
@@ -1210,11 +1234,11 @@ function renderFiado(){
     save(); renderAll(); toast('Cuenta saldada: ' + fmt(bal) + ' de ' + c.name);
   }));
   $('client-body').querySelectorAll('[data-abono]').forEach(b => b.addEventListener('click', ()=>{
-    abonoClientId = Number(b.dataset.abono);
+    abonoClientId = Number(b.dataset.abono); revTarget = null;
     const c = state.clients.find(x=>x.id===abonoClientId);
     $('ma-info').innerHTML = `<strong>${esc(c.name)}</strong> debe <strong>${fmt(clientBalance(c.id))}</strong>`;
     $('ma-amount').value = '';
-    $('modal-abono').classList.add('open'); $('ma-amount').focus();
+    openAbonoModal('pago');
   }));
   $('client-body').querySelectorAll('[data-delc]').forEach(b => b.addEventListener('click', ()=> deleteClient(Number(b.dataset.delc))));
 
@@ -1227,8 +1251,18 @@ function renderFiado(){
   $('fiado-mov-body').innerHTML = movs.map(m=>{
     const c = state.clients.find(x=>x.id===m.clientId);
     return `<tr><td>${fmtDateTime(m.ts)}</td><td>${esc(c?c.name:'(eliminado)')}</td><td>${m.det}</td>
-      <td class="num" style="color:${m.neg?'var(--ok)':'var(--danger)'}">${m.neg?'−':'+'}${fmt(m.amount)}</td></tr>`;
+      <td class="num" style="color:${m.neg?'var(--ok)':'var(--danger)'}">${m.neg?'−':'+'}${fmt(m.amount)}</td>
+      <td>${m.rest > 0.009 ? `<button class="btn btn-secondary btn-sm" data-revpago="${m.abonoId}">↩ Revertir</button>` : ''}</td></tr>`;
   }).join('');
+  $('fiado-mov-body').querySelectorAll('[data-revpago]').forEach(b => b.addEventListener('click', ()=>{
+    const a = state.abonos.find(x=>x.id===Number(b.dataset.revpago)); if(!a) return;
+    const c = state.clients.find(x=>x.id===a.clientId);
+    revTarget = a.id; abonoClientId = a.clientId;
+    $('ma-info').innerHTML = `Pago de <strong>${fmt(a.amount)}</strong> de <strong>${esc(c?c.name:'(eliminado)')}</strong>. `
+      + `Se puede revertir hasta <strong>${fmt(abonoRestante(a))}</strong>; la deuda vuelve a subir ese monto.`;
+    $('ma-amount').value = Math.round(abonoRestante(a)*100)/100;
+    openAbonoModal('rev');
+  }));
   $('fiado-mov-empty').textContent = fmPeriod==='todo' ? 'Sin movimientos todavía.' : 'Sin movimientos en este período.';
   $('fiado-mov-empty').style.display = movs.length ? 'none' : 'block';
 }
@@ -1246,8 +1280,7 @@ function fiadoMovsFiltered(){
   return [
     ...state.sales.filter(s=>s.pay==='fiado' && (!filterCid || s.clientId===filterCid) && inR(s.ts))
       .map(s=>({ts:s.ts, clientId:s.clientId, det:'Ticket #'+s.id+' — compra fiada ('+s.items.reduce((t,i)=>t+i.qty,0)+' art.)', amount:s.total, neg:false})),
-    ...state.abonos.filter(a=>(!filterCid || a.clientId===filterCid) && inR(a.ts))
-      .map(a=>({ts:a.ts, clientId:a.clientId, det: a.saleId ? 'Pago de ticket #'+a.saleId : 'Pago', amount:a.amount, neg:true}))
+    ...state.abonos.filter(a=>(!filterCid || a.clientId===filterCid) && inR(a.ts)).map(abonoMov)
   ].sort((a,b)=>b.ts.localeCompare(a.ts));
 }
 $('fiado-filter').addEventListener('change', renderFiado);
@@ -1286,7 +1319,7 @@ $('btn-fiado-excel').addEventListener('click', ()=>{
   rows.push(tr(['Fecha','Cliente','Detalle','Tipo','Monto']));
   fiadoMovsFiltered().forEach(m=>{
     const c = state.clients.find(x=>x.id===m.clientId);
-    rows.push(tr([fmtDateTime(m.ts), c?c.name:'(eliminado)', m.det, m.neg?'Pago':'Compra fiada', m.neg ? -m.amount : m.amount]));
+    rows.push(tr([fmtDateTime(m.ts), c?c.name:'(eliminado)', m.det, m.rev?'Reversión':m.neg?'Pago':'Compra fiada', m.neg ? -m.amount : m.amount]));
   });
   const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1">${rows.join('')}</table></body></html>`;
   const name = 'Fiados_AMADA_' + todayKey() + '.xls';
